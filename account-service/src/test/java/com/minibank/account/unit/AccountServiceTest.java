@@ -178,10 +178,6 @@ class AccountServiceTest {
 
             when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(accountRepository.addBalance(testAccountId, new BigDecimal("500.00"))).thenReturn(1);
-            when(accountRepository.getBalanceById(testAccountId))
-                    .thenReturn(Optional.of(new BigDecimal("1500.00")));
-            when(accountRepository.getAvailableBalanceById(testAccountId))
-                    .thenReturn(Optional.of(new BigDecimal("1500.00")));
 
             // Act
             AccountResponse response = accountService.deposit(testAccountId, request);
@@ -201,10 +197,6 @@ class AccountServiceTest {
 
             when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(accountRepository.deductBalance(testAccountId, new BigDecimal("500.00"))).thenReturn(1);
-            when(accountRepository.getBalanceById(testAccountId))
-                    .thenReturn(Optional.of(new BigDecimal("500.00")));
-            when(accountRepository.getAvailableBalanceById(testAccountId))
-                    .thenReturn(Optional.of(new BigDecimal("500.00")));
 
             // Act
             AccountResponse response = accountService.withdraw(testAccountId, request);
@@ -274,7 +266,9 @@ class AccountServiceTest {
 
             // Assert
             assertFalse(result);
-            verify(accountRepository, times(2)).addBalance(testAccountId, new BigDecimal("500.00"));  // Once for compensation
+            // Verify: destination addBalance failed, then compensation to source
+            verify(accountRepository).addBalance(toAccountId, new BigDecimal("500.00"));  // Destination attempt
+            verify(accountRepository).addBalance(testAccountId, new BigDecimal("500.00"));  // Compensation
         }
 
         @Test
