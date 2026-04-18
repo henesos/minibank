@@ -180,6 +180,66 @@ services:
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════════════════
+  # Notification Service (Spring Boot) - Port 8084
+  # ═══════════════════════════════════════════════════════════════════════
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: minibank-notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://notification-db:5432/notification_db
+      - SPRING_DATASOURCE_USERNAME=minibank
+      - SPRING_DATASOURCE_PASSWORD=minibank123
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Notification Database (PostgreSQL) - Port 5435
+  # ═══════════════════════════════════════════════════════════════════════
+  notification-db:
+    image: postgres:15-alpine
+    container_name: minibank-notification-db
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_DB=notification_db
+      - POSTGRES_USER=minibank
+      - POSTGRES_PASSWORD=minibank123
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minibank -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
   # Redis (Cache & Session) - Port 6379
   # ═══════════════════════════════════════════════════════════════════════
   redis:
@@ -271,6 +331,7 @@ volumes:
   user-db-data:
   account-db-data:
   transaction-db-data:
+  notification-db-data:
   redis-data:
   zookeeper-data:
   zookeeper-logs:

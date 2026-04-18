@@ -19,10 +19,10 @@ COPY --from=build /app/target/*.jar app.jar
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD wget -q --spider http://localhost:8083/actuator/health || exit 1
+  CMD wget -q --spider http://localhost:8084/actuator/health || exit 1
 
 # Expose port
-EXPOSE 8083
+EXPOSE 8084
 
 # JVM options for container
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
