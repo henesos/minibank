@@ -18,6 +18,14 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+        default_schema: ""
+
+  # Disable Kafka for tests
+  kafka:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
 # Notification Service Settings
 notification:

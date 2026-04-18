@@ -2,12 +2,49 @@ version: '3.8'
 
 services:
   # ═══════════════════════════════════════════════════════════════════════
+  # API Gateway (Spring Cloud Gateway) - Port 8080
+  # ═══════════════════════════════════════════════════════════════════════
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: minibank-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - JWT_SECRET=${JWT_SECRET:-minibank-super-secret-key-for-development-only-min-256-bits}
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      transaction-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
   # User Service (Spring Boot) - Port 8081
   # ═══════════════════════════════════════════════════════════════════════
   user-service:
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: user-service/Dockerfile
     container_name: minibank-user-service
     ports:
       - "8081:8081"
@@ -64,8 +101,8 @@ services:
   # ═══════════════════════════════════════════════════════════════════════
   account-service:
     build:
-      context: ./account-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: account-service/Dockerfile
     container_name: minibank-account-service
     ports:
       - "8082:8082"
@@ -124,8 +161,8 @@ services:
   # ═══════════════════════════════════════════════════════════════════════
   transaction-service:
     build:
-      context: ./transaction-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: transaction-service/Dockerfile
     container_name: minibank-transaction-service
     ports:
       - "8083:8083"
@@ -184,8 +221,8 @@ services:
   # ═══════════════════════════════════════════════════════════════════════
   notification-service:
     build:
-      context: ./notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: notification-service/Dockerfile
     container_name: minibank-notification-service
     ports:
       - "8084:8084"

@@ -70,7 +70,7 @@ public class NotificationController {
     })
     public ResponseEntity<NotificationResponse> getNotification(
             @Parameter(description = "Notification ID") 
-            @PathVariable UUID notificationId) {
+            @PathVariable("notificationId") UUID notificationId) {
         
         log.debug("Getting notification: {}", notificationId);
         
@@ -88,7 +88,7 @@ public class NotificationController {
     })
     public ResponseEntity<Page<NotificationResponse>> getUserNotifications(
             @Parameter(description = "User ID") 
-            @PathVariable UUID userId,
+            @PathVariable("userId") UUID userId,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
         
         log.debug("Getting notifications for user: {}", userId);
@@ -110,7 +110,7 @@ public class NotificationController {
     })
     public ResponseEntity<NotificationResponse> sendNotification(
             @Parameter(description = "Notification ID") 
-            @PathVariable UUID notificationId) {
+            @PathVariable("notificationId") UUID notificationId) {
         
         log.info("Sending notification: {}", notificationId);
         

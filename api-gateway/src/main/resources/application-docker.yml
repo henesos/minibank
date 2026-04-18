@@ -1,0 +1,67 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            key-resolver: "#{@ipKeyResolver}"
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+
+# Service URLs for Docker environment
+services:
+  user-service:
+    url: http://user-service:8081
+  account-service:
+    url: http://account-service:8082
+  transaction-service:
+    url: http://transaction-service:8083
+  notification-service:
+    url: http://notification-service:8084
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:minibank-super-secret-key-for-development-only-min-256-bits}
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.minibank.gateway: INFO
+    org.springframework.cloud.gateway: INFO

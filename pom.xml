@@ -18,8 +18,7 @@
         <module>account-service</module>
         <module>transaction-service</module>
         <module>notification-service</module>
-        <!-- Future modules -->
-        <!-- <module>api-gateway</module> -->
+        <module>api-gateway</module>
     </modules>
 
     <properties>
