@@ -1,0 +1,216 @@
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════
+  # User Service (Spring Boot) - Port 8081
+  # ═══════════════════════════════════════════════════════════════════════
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: minibank-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-db:5432/user_db
+      - SPRING_DATASOURCE_USERNAME=minibank
+      - SPRING_DATASOURCE_PASSWORD=minibank123
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - JWT_SECRET=${JWT_SECRET:-minibank-super-secret-key-for-development-only-min-256-bits}
+    depends_on:
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # User Database (PostgreSQL) - Port 5432
+  # ═══════════════════════════════════════════════════════════════════════
+  user-db:
+    image: postgres:15-alpine
+    container_name: minibank-user-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=user_db
+      - POSTGRES_USER=minibank
+      - POSTGRES_PASSWORD=minibank123
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minibank -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Account Service (Spring Boot) - Port 8082
+  # ═══════════════════════════════════════════════════════════════════════
+  account-service:
+    build:
+      context: ./account-service
+      dockerfile: Dockerfile
+    container_name: minibank-account-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://account-db:5432/account_db
+      - SPRING_DATASOURCE_USERNAME=minibank
+      - SPRING_DATASOURCE_PASSWORD=minibank123
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      account-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Account Database (PostgreSQL) - Port 5433
+  # ═══════════════════════════════════════════════════════════════════════
+  account-db:
+    image: postgres:15-alpine
+    container_name: minibank-account-db
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=account_db
+      - POSTGRES_USER=minibank
+      - POSTGRES_PASSWORD=minibank123
+    volumes:
+      - account-db-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minibank -d account_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Redis (Cache & Session) - Port 6379
+  # ═══════════════════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: minibank-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Zipkin (Distributed Tracing) - Port 9411
+  # ═══════════════════════════════════════════════════════════════════════
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: minibank-zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - minibank-network
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Zookeeper (Kafka dependency)
+  # ═══════════════════════════════════════════════════════════════════════
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: minibank-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - minibank-network
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Kafka (Message Broker) - Ports 9092, 9093
+  # ═══════════════════════════════════════════════════════════════════════
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: minibank-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Networks
+# ═══════════════════════════════════════════════════════════════════════════
+networks:
+  minibank-network:
+    driver: bridge
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Volumes
+# ═══════════════════════════════════════════════════════════════════════════
+volumes:
+  user-db-data:
+  account-db-data:
+  redis-data:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
