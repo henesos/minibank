@@ -3,30 +3,58 @@ package com.minibank.notification.integration;
 import com.minibank.notification.dto.NotificationRequest;
 import com.minibank.notification.dto.NotificationResponse;
 import com.minibank.notification.entity.Notification.NotificationType;
+import com.minibank.notification.repository.NotificationRepository;
+import com.minibank.notification.service.EmailService;
+import com.minibank.notification.service.SmsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.context.jdbc.AutoConfigureTestDatabase;
 
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 /**
  * Integration tests for Notification Service.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
+@AutoConfigureMockMvc
 class NotificationServiceIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @MockBean
+    private EmailService emailService;
+
+    @MockBean
+    private SmsService smsService;
+
+    @BeforeEach
+    void setUp() {
+        notificationRepository.deleteAll();
+        when(emailService.send(any())).thenReturn(true);
+        when(emailService.isValidEmail(any())).thenReturn(true);
+        when(smsService.send(any())).thenReturn(true);
+        when(smsService.isValidPhoneNumber(any())).thenReturn(true);
+    }
 
     @Nested
     @DisplayName("Notification API Integration Tests")
@@ -82,6 +110,7 @@ class NotificationServiceIntegrationTest {
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
+            assertNotNull(response.getBody());
             assertTrue(response.getBody().contains("healthy"));
         }
 
