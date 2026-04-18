@@ -122,6 +122,60 @@ import static org.mockito.ArgumentMatchers.eq;
 
 ---
 
+### Hata 2: UnnecessaryStubbingException - Gereksiz Mock Tanımları
+
+**Hata Mesajı:**
+```
+Unnecessary stubbings detected.
+Following stubbings are unnecessary:
+  1. -> at AccountServiceTest.java:181
+  2. -> at AccountServiceTest.java:183
+```
+
+**Neden:**
+`deposit_Success` ve `withdraw_Success` testlerinde `getBalanceById` ve `getAvailableBalanceById` metodları mock'lanmış ancak bu metodlar test sırasında çağrılmamış. `deposit()` ve `withdraw()` metodları sonunda `getAccountById()` çağırıyor, o da `findById()` kullanıyor.
+
+**Çözüm:**
+Gereksiz stub tanımlarını kaldırdık:
+```java
+// KALDIRILDI - Gereksiz stub'lar:
+// when(accountRepository.getBalanceById(testAccountId)).thenReturn(...)
+// when(accountRepository.getAvailableBalanceById(testAccountId)).thenReturn(...)
+```
+
+---
+
+### Hata 3: transfer_Compensation Test - Yanlış Verify
+
+**Hata Mesajı:**
+```
+Wanted 2 times:
+-> at AccountServiceTest.java:277
+But was 1 time:
+-> at AccountService.transfer(AccountService.java:236)
+```
+
+**Neden:**
+Test yanlış verify yapmış:
+```java
+// YANLIŞ - Aynı ID ile 2 kez çağrılmasını beklemek
+verify(accountRepository, times(2)).addBalance(testAccountId, ...);
+```
+
+Aslında:
+- `addBalance(toAccountId, ...)` → destination için 1 kez (başarısız)
+- `addBalance(testAccountId, ...)` → compensation için 1 kez
+
+**Çözüm:**
+Her çağrıyı ayrı ayrı verify ettik:
+```java
+// DOĞRU
+verify(accountRepository).addBalance(toAccountId, new BigDecimal("500.00"));   // Destination
+verify(accountRepository).addBalance(testAccountId, new BigDecimal("500.00")); // Compensation
+```
+
+---
+
 ## Öğrenilen Dersler (Sprint 7)
 
 1. **Mockito Static Imports:** `any()`, `eq()`, `mock()` gibi metodlar için static import gereklidir:
@@ -135,6 +189,10 @@ import static org.mockito.ArgumentMatchers.eq;
    ```
    jdbc:tc:postgresql:15:///account_test_db
    ```
+
+3. **Unnecessary Stubbing:** Mockito strict mode'da gereksiz stub'lar hata verir. Sadece gerçekten çağrılacak metodları mock'layın.
+
+4. **Verify Doğruluğu:** `times(n)` kullanırken hangi ID/parametre ile kaç kez çağrıldığını doğru hesaplayın.
 
 ---
 
@@ -159,3 +217,117 @@ mvn test -Dtest=UserServiceTest  # Sadece unit testler
 mvn verify                   # Integration testler dahil
 mvn jacoco:report           # Coverage raporu
 ```
+
+---
+
+## Sprint 8 - Transaction Service
+
+### Hata 1: BeanDefinitionOverrideException - jpaAuditingHandler
+
+**Hata Mesajı:**
+```
+BeanDefinitionOverrideException: Invalid bean definition with name 'jpaAuditingHandler'
+The bean 'jpaAuditingHandler' could not be registered. A bean with that name has already been defined
+```
+
+**Neden:**
+`@EnableJpaAuditing` annotasyonu iki farklı yerde tanımlanmıştı:
+- `TransactionServiceApplication.java` (doğru yer)
+- `RedisConfig.java` (gereksiz)
+
+**Çözüm:**
+```java
+// RedisConfig.java - @EnableJpaAuditing KALDIRILDI
+@Configuration
+// @EnableJpaAuditing  <- KALDIRILDI
+public class RedisConfig {
+    // ...
+}
+```
+
+**Dosya:** `transaction-service/src/main/java/com/minibank/transaction/config/RedisConfig.java`
+
+---
+
+### Hata 2: Docker Build Failed - JAR Not Found
+
+**Hata Mesajı:**
+```
+failed to solve: lstat /target: no such file or directory
+```
+
+**Neden:**
+Transaction-service Dockerfile'ı multi-stage build kullanmıyordu. Pre-built JAR dosyası arıyordu:
+```dockerfile
+# YANLIŞ - Pre-built JAR gerekiyor
+FROM eclipse-temurin:17-jre-alpine
+COPY target/transaction-service-*.jar app.jar
+```
+
+**Çözüm:**
+Multi-stage build kullanıldı:
+```dockerfile
+# DOĞRU - Multi-stage build
+FROM maven:3.9-eclipse-temurin-17-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+COPY --from=build /app/target/*.jar app.jar
+```
+
+**Dosya:** `transaction-service/Dockerfile`
+
+---
+
+## Sprint 9 - Notification Service
+
+### Hata Yok
+
+Sprint 9 Notification Service sorunsuz tamamlandı.
+
+**Oluşturulan Bileşenler:**
+- Notification Entity (status lifecycle ile)
+- NotificationRepository (custom queries)
+- NotificationService (create, send, retry)
+- EmailService / SmsService (mock implementations)
+- Kafka Consumer (TransactionEventConsumer)
+- NotificationController (REST API)
+- Unit Tests + Integration Tests
+- Dockerfile + docker-compose.yml update
+
+---
+
+## Test Sonuçları (Güncel)
+
+| Sprint | Service | Tests | Status |
+|--------|---------|-------|--------|
+| Sprint 6 | User Service | 23 tests | ✅ PASS |
+| Sprint 7 | Account Service | 13 tests | ✅ PASS |
+| Sprint 8 | Transaction Service | 15 tests | ✅ PASS |
+| Sprint 9 | Notification Service | 15 tests | ✅ PASS |
+
+---
+
+## Öğrenilen Dersler (Genel)
+
+1. **JPA Auditing:** `@EnableJpaAuditing` sadece main application class'ında tanımlanmalı. Config class'larında tekrar tanımlamak conflict'e neden olur.
+
+2. **Docker Multi-Stage Build:** Her microservice için Dockerfile multi-stage build kullanmalı. Bu sayede:
+   - Build ortamı (Maven, JDK) runtime'da yer kaplamaz
+   - Pre-built JAR gereksinimi ortadan kalkar
+   - Image boyutu küçülür
+
+3. **Kafka Consumer Idempotency:** Event-driven sistemlerde duplicate processing'i önlemek için idempotency key kullanılmalı.
+
+4. **Notification Patterns:** Transaction-based notifications için:
+   - Event type'a göre farklı template'ler
+   - Retry mechanism (max attempts)
+   - Status tracking (PENDING → SENT → DELIVERED)
+
+---
+
+*Tarih: 18 Nisan 2026 - Güncellendi*

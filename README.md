@@ -60,15 +60,25 @@ A microservices-based digital wallet application built with **Spring Boot 3.x**,
 - Atomic balance updates
 - Distributed idempotency support
 
-### Transaction Service (Port: 8083) - *Planned*
+### Transaction Service (Port: 8083)
 - Money transfers between accounts
 - Saga orchestration for distributed transactions
 - Outbox pattern for reliable messaging
+- Distributed idempotency with Redis
 
-### Notification Service - *Planned*
+### Notification Service (Port: 8084)
 - Email notifications
 - SMS notifications
-- Kafka consumer
+- Push notifications
+- Kafka consumer for transaction events
+
+### API Gateway (Port: 8080)
+- Spring Cloud Gateway for routing
+- JWT authentication for all services
+- Rate limiting with Redis
+- Circuit breaker pattern
+- Request logging and tracing
+- CORS configuration
 
 ## 🚀 Getting Started
 
@@ -155,10 +165,10 @@ Following **TDD (Test-Driven Development)** approach:
 | 4 | Database Design (ER) | ✅ Complete |
 | 5 | Architecture Review | ✅ Complete |
 | 6 | User Service Implementation | ✅ Complete |
-| 7 | Account Service Implementation | 🚧 In Progress |
-| 8 | Transaction Service + Saga | 📋 Planned |
-| 9 | Notification Service + Kafka | 📋 Planned |
-| 10 | API Gateway + Frontend | 📋 Planned |
+| 7 | Account Service Implementation | ✅ Complete |
+| 8 | Transaction Service + Saga | ✅ Complete |
+| 9 | Notification Service + Kafka | ✅ Complete |
+| 10 | API Gateway + Frontend | 🔄 In Progress |
 
 ## 🔐 Security Features
 
