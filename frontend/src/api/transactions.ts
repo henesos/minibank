@@ -5,6 +5,7 @@ import type {
   DepositRequest,
   WithdrawRequest,
   PaginatedResponse,
+  Account,
 } from '../types'
 
 export interface TransactionFilter {
@@ -29,32 +30,60 @@ export const transactionsApi = {
   },
 
   transfer: async (data: TransferRequest): Promise<Transaction> => {
+    // First, get the destination account ID from account number
+    const accountResponse = await apiClient.get<Account>(`/api/v1/accounts/number/${data.toAccountNumber}`)
+    const toAccountId = accountResponse.data.id
+
+    // Generate idempotency key for transfer
+    const idempotencyKey = crypto.randomUUID()
+
     // Transfer is initiated via POST /api/v1/transactions
     const response = await apiClient.post<Transaction>('/api/v1/transactions', {
       fromAccountId: data.fromAccountId,
-      toAccountId: data.toAccountNumber, // Note: toAccountNumber is actually accountId
+      toAccountId: toAccountId,
       amount: data.amount,
       description: data.description,
       currency: 'TRY',
+      idempotencyKey: idempotencyKey,
     })
     return response.data
   },
 
   deposit: async (data: DepositRequest): Promise<Transaction> => {
-    // Deposit via account service
-    const response = await apiClient.post<Transaction>(
+    // Deposit via account service - returns AccountResponse, we create a synthetic Transaction
+    const response = await apiClient.post<Account>(
       `/api/v1/accounts/${data.accountId}/deposit`,
       { amount: data.amount, description: data.description }
     )
-    return response.data
+    // Return a synthetic transaction object for UI consistency
+    return {
+      id: crypto.randomUUID(),
+      accountId: data.accountId,
+      type: 'DEPOSIT',
+      amount: data.amount,
+      currency: response.data.currency || 'TRY',
+      status: 'COMPLETED',
+      description: data.description,
+      createdAt: new Date().toISOString(),
+    } as Transaction
   },
 
   withdraw: async (data: WithdrawRequest): Promise<Transaction> => {
-    // Withdraw via account service
-    const response = await apiClient.post<Transaction>(
+    // Withdraw via account service - returns AccountResponse, we create a synthetic Transaction
+    const response = await apiClient.post<Account>(
       `/api/v1/accounts/${data.accountId}/withdraw`,
       { amount: data.amount, description: data.description }
     )
-    return response.data
+    // Return a synthetic transaction object for UI consistency
+    return {
+      id: crypto.randomUUID(),
+      accountId: data.accountId,
+      type: 'WITHDRAWAL',
+      amount: data.amount,
+      currency: response.data.currency || 'TRY',
+      status: 'COMPLETED',
+      description: data.description,
+      createdAt: new Date().toISOString(),
+    } as Transaction
   },
 }

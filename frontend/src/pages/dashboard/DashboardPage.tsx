@@ -6,6 +6,7 @@ import {
   TrendingDown,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowLeftRight,
   CreditCard,
 } from 'lucide-react'
 import { Card, Button, Spinner } from '../../components/common'
@@ -197,8 +198,10 @@ const DashboardPage: React.FC = () => {
                     >
                       {transaction.type === 'DEPOSIT' ? (
                         <ArrowDownLeft className="w-5 h-5" />
-                      ) : (
+                      ) : transaction.type === 'WITHDRAWAL' ? (
                         <ArrowUpRight className="w-5 h-5" />
+                      ) : (
+                        <ArrowLeftRight className="w-5 h-5" />
                       )}
                     </div>
                     <div>
@@ -215,10 +218,12 @@ const DashboardPage: React.FC = () => {
                     className={`font-semibold ${
                       transaction.type === 'DEPOSIT'
                         ? 'text-green-600'
-                        : 'text-red-600'
+                        : transaction.type === 'WITHDRAWAL'
+                        ? 'text-red-600'
+                        : 'text-blue-600'
                     }`}
                   >
-                    {transaction.type === 'DEPOSIT' ? '+' : '-'}
+                    {transaction.type === 'DEPOSIT' ? '+' : transaction.type === 'WITHDRAWAL' ? '-' : ''}
                     {formatCurrency(transaction.amount)}
                   </p>
                 </div>

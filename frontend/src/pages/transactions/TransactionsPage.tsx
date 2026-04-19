@@ -203,10 +203,12 @@ const TransactionsPage: React.FC = () => {
                       className={`font-semibold ${
                         transaction.type === 'DEPOSIT'
                           ? 'text-green-600'
-                          : 'text-red-600'
+                          : transaction.type === 'WITHDRAWAL'
+                          ? 'text-red-600'
+                          : 'text-blue-600'
                       }`}
                     >
-                      {transaction.type === 'DEPOSIT' ? '+' : '-'}
+                      {transaction.type === 'DEPOSIT' ? '+' : transaction.type === 'WITHDRAWAL' ? '-' : ''}
                       {formatCurrency(transaction.amount)}
                     </p>
                     <p className="text-sm text-gray-500">

@@ -28,6 +28,7 @@ public class TransactionResponse {
     private UUID toUserId;
     private BigDecimal amount;
     private String currency;
+    private String type;  // TRANSFER, DEPOSIT, WITHDRAWAL
     private String status;
     private String sagaStep;
     private String description;
@@ -50,6 +51,7 @@ public class TransactionResponse {
                 .toUserId(transaction.getToUserId())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
+                .type("TRANSFER")  // All transactions in transaction-service are transfers
                 .status(transaction.getStatus() != null ? transaction.getStatus().name() : null)
                 .sagaStep(transaction.getSagaStep() != null ? transaction.getSagaStep().name() : null)
                 .description(transaction.getDescription())

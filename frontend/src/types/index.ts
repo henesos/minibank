@@ -4,12 +4,13 @@ export interface User {
   email: string
   firstName: string
   lastName: string
+  fullName?: string
   phone?: string
   status: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'LOCKED'
   emailVerified: boolean
   phoneVerified: boolean
+  lastLoginAt?: string
   createdAt: string
-  updatedAt: string
 }
 
 // Auth types
@@ -54,16 +55,20 @@ export interface CreateAccountRequest {
 // Transaction types
 export interface Transaction {
   id: string
-  accountId: string
+  accountId?: string  // For DEPOSIT/WITHDRAWAL (synthetic transactions)
   type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER' | 'PAYMENT'
   amount: number
   currency: string
-  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  status: 'PENDING' | 'PROCESSING' | 'DEBITED' | 'COMPLETED' | 'FAILED' | 'COMPENSATING' | 'COMPENSATED' | 'CANCELLED'
   description?: string
   fromAccountId?: string
   toAccountId?: string
+  fromUserId?: string
+  toUserId?: string
   referenceNumber?: string
   createdAt: string
+  completedAt?: string
+  failureReason?: string
 }
 
 export interface TransferRequest {

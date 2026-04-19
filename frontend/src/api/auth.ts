@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { AuthResponse, LoginRequest, RegisterRequest, User, ApiResponse } from '../types'
+import type { AuthResponse, LoginRequest, RegisterRequest, User } from '../types'
 
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
@@ -13,13 +13,15 @@ export const authApi = {
   },
 
   getCurrentUser: async (): Promise<User> => {
-    const response = await apiClient.get<ApiResponse<User>>('/api/v1/users/me')
-    return response.data.data
+    // Backend returns UserResponse directly, not wrapped in ApiResponse
+    const response = await apiClient.get<User>('/api/v1/users/me')
+    return response.data
   },
 
   updateProfile: async (id: string, data: Partial<User>): Promise<User> => {
-    const response = await apiClient.put<ApiResponse<User>>(`/api/v1/users/${id}`, data)
-    return response.data.data
+    // Backend returns UserResponse directly, not wrapped in ApiResponse
+    const response = await apiClient.put<User>(`/api/v1/users/${id}`, data)
+    return response.data
   },
 
   logout: (): void => {
