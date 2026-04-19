@@ -13,6 +13,9 @@ import java.util.UUID;
 
 /**
  * DTO for account creation request.
+ * 
+ * Note: userId is optional in request body as it will be extracted
+ * from X-User-ID header by the API Gateway.
  */
 @Data
 @Builder
@@ -20,7 +23,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AccountCreateRequest {
 
-    @NotNull(message = "User ID is required")
+    /**
+     * User ID - optional in request, set from X-User-ID header.
+     */
     private UUID userId;
 
     @NotNull(message = "Account type is required")

@@ -60,11 +60,25 @@ public class AccountController {
     }
 
     /**
-     * Create a new account.
+     * Create a new account for the authenticated user.
+     * Uses X-User-ID header from API Gateway (extracted from JWT).
      */
     @PostMapping
-    public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody AccountCreateRequest request) {
-        log.info("Create account request for user: {}", request.getUserId());
+    public ResponseEntity<AccountResponse> createAccount(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody AccountCreateRequest request) {
+        
+        String userIdHeader = httpRequest.getHeader("X-User-ID");
+        
+        if (userIdHeader == null || userIdHeader.isEmpty()) {
+            log.warn("X-User-ID header missing");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        UUID userId = UUID.fromString(userIdHeader);
+        request.setUserId(userId); // Set userId from header
+        
+        log.info("Create account request for user: {}, type: {}", userId, request.getAccountType());
         AccountResponse response = accountService.createAccount(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
