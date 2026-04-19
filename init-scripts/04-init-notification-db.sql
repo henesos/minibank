@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     retry_count INTEGER DEFAULT 0,
     max_retries INTEGER DEFAULT 3,
     error_message VARCHAR(1000),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
     sent_at TIMESTAMP,
     delivered_at TIMESTAMP,
     metadata TEXT,
@@ -41,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_notification_type ON notifications(type);
 CREATE INDEX IF NOT EXISTS idx_notification_reference ON notifications(reference_id);
 CREATE INDEX IF NOT EXISTS idx_notification_created_at ON notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_notification_idempotency ON notifications(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_notification_user_read ON notifications(user_id, is_read);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Notification Templates Table (for future use)
