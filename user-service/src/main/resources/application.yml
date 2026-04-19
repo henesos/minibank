@@ -69,6 +69,16 @@ logging:
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG
 
+# SpringDoc OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  packages-to-scan: com.minibank.user.controller
+  paths-to-match: /api/v1/**
+
 # Custom Application Properties
 app:
   cache:

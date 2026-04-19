@@ -70,3 +70,13 @@ app:
     default-currency: TRY
     min-balance: 0.00
     max-daily-transfer: 50000.00
+
+# SpringDoc OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  packages-to-scan: com.minibank.account.controller
+  paths-to-match: /api/v1/**

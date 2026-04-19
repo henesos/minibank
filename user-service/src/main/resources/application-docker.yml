@@ -71,3 +71,13 @@ app:
   cache:
     user-ttl: 300
     session-ttl: 1800
+
+# SpringDoc OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  packages-to-scan: com.minibank.user.controller
+  paths-to-match: /api/v1/**

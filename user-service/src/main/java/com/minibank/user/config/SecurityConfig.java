@@ -44,7 +44,11 @@ public class SecurityConfig {
                     "/api/v1/users/login",
                     "/api/v1/users/refresh",
                     "/api/v1/users/health",
-                    "/actuator/**"
+                    "/actuator/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/v3/api-docs.yaml"
                 ).permitAll()
                 
                 // All other endpoints - for development, permit all

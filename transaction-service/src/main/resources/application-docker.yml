@@ -75,3 +75,13 @@ app:
     retry-count: 3
     retry-delay-ms: 1000
     timeout-ms: 30000
+
+# SpringDoc OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  packages-to-scan: com.minibank.transaction.controller
+  paths-to-match: /api/v1/**

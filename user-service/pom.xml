@@ -88,6 +88,13 @@
             <scope>runtime</scope>
         </dependency>
         
+        <!-- SpringDoc OpenAPI (Swagger UI) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        
         <!-- Micrometer Tracing (replaces Sleuth) -->
         <dependency>
             <groupId>io.micrometer</groupId>
