@@ -1,22 +1,64 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react'
 
-interface Notification { id: string; type: 'success' | 'error' | 'warning' | 'info'; message: string; }
+interface Notification {
+  id: string
+  type: 'success' | 'error' | 'warning' | 'info'
+  message: string
+}
+
+const notifications: Notification[] = []
+const listeners: Set<() => void> = new Set()
+
+const notify = () => listeners.forEach((listener) => listener())
 
 export const useNotification = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [, forceUpdate] = useState({})
 
-  const addNotification = useCallback((type: Notification['type'], message: string) => {
-    const id = Date.now().toString();
-    setNotifications((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 5000);
-  }, []);
+  const subscribe = useCallback(() => {
+    const listener = () => forceUpdate({})
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }, [])
+
+  // Subscribe on mount
+  useState(() => {
+    subscribe()
+  })
+
+  const show = useCallback((type: Notification['type'], message: string) => {
+    const id = Date.now().toString()
+    notifications.push({ id, type, message })
+    notify()
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      const index = notifications.findIndex((n) => n.id === id)
+      if (index > -1) {
+        notifications.splice(index, 1)
+        notify()
+      }
+    }, 5000)
+  }, [subscribe])
+
+  const showSuccess = useCallback((message: string) => show('success', message), [show])
+  const showError = useCallback((message: string) => show('error', message), [show])
+  const showWarning = useCallback((message: string) => show('warning', message), [show])
+  const showInfo = useCallback((message: string) => show('info', message), [show])
+
+  const remove = useCallback((id: string) => {
+    const index = notifications.findIndex((n) => n.id === id)
+    if (index > -1) {
+      notifications.splice(index, 1)
+      notify()
+    }
+  }, [])
 
   return {
     notifications,
-    removeNotification: useCallback((id: string) => setNotifications((prev) => prev.filter((n) => n.id !== id)), []),
-    showSuccess: useCallback((message: string) => addNotification('success', message), [addNotification]),
-    showError: useCallback((message: string) => addNotification('error', message), [addNotification]),
-    showWarning: useCallback((message: string) => addNotification('warning', message), [addNotification]),
-    showInfo: useCallback((message: string) => addNotification('info', message), [addNotification]),
-  };
-};
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
+    remove,
+  }
+}

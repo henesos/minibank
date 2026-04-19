@@ -1,17 +1,20 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { User } from '../types';
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type { User } from '../types'
 
 interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  setUser: (user: User | null) => void;
-  setToken: (token: string | null) => void;
-  login: (user: User, token: string) => void;
-  logout: () => void;
-  setLoading: (loading: boolean) => void;
+  user: User | null
+  token: string | null
+  refreshToken: string | null
+  isAuthenticated: boolean
+  isLoading: boolean
+
+  // Actions
+  setAuth: (user: User, token: string, refreshToken: string) => void
+  setUser: (user: User) => void
+  setToken: (token: string, refreshToken?: string) => void
+  setLoading: (loading: boolean) => void
+  logout: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -19,14 +22,45 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
-      setToken: (token) => set({ token }),
-      login: (user, token) => set({ user, token, isAuthenticated: true, isLoading: false }),
-      logout: () => set({ user: null, token: null, isAuthenticated: false, isLoading: false }),
-      setLoading: (isLoading) => set({ isLoading }),
+
+      setAuth: (user, token, refreshToken) =>
+        set({
+          user,
+          token,
+          refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        }),
+
+      setUser: (user) =>
+        set({ user }),
+
+      setToken: (token, refreshToken) =>
+        set({ token, ...(refreshToken && { refreshToken }) }),
+
+      setLoading: (isLoading) =>
+        set({ isLoading }),
+
+      logout: () =>
+        set({
+          user: null,
+          token: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isLoading: false,
+        }),
     }),
-    { name: 'minibank-auth', partialize: (state) => ({ user: state.user, token: state.token, isAuthenticated: state.isAuthenticated }) }
+    {
+      name: 'minibank-auth',
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
   )
-);
+)

@@ -1,26 +1,43 @@
-import React from 'react';
+import React from 'react'
+import { cn } from '../../utils/cn'
 
-interface CardProps {
-  children: React.ReactNode;
-  title?: string;
-  subtitle?: string;
-  headerAction?: React.ReactNode;
-  footer?: React.ReactNode;
-  className?: string;
-  noPadding?: boolean;
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'bordered' | 'elevated'
+  padding?: 'none' | 'sm' | 'md' | 'lg'
 }
 
-const Card: React.FC<CardProps> = ({ children, title, subtitle, headerAction, footer, className = '', noPadding = false }) => (
-  <div className={`bg-white rounded-xl shadow-sm border border-gray-200 ${className}`}>
-    {(title || headerAction) && (
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <div>{title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}{subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}</div>
-        {headerAction && <div>{headerAction}</div>}
-      </div>
-    )}
-    <div className={noPadding ? '' : 'p-6'}>{children}</div>
-    {footer && <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">{footer}</div>}
-  </div>
-);
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, children, variant = 'default', padding = 'md', ...props }, ref) => {
+    const variants = {
+      default: 'bg-white shadow-sm',
+      bordered: 'bg-white border border-gray-200',
+      elevated: 'bg-white shadow-lg',
+    }
 
-export default Card;
+    const paddings = {
+      none: '',
+      sm: 'p-4',
+      md: 'p-6',
+      lg: 'p-8',
+    }
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'rounded-xl',
+          variants[variant],
+          paddings[padding],
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    )
+  }
+)
+
+Card.displayName = 'Card'
+
+export default Card
