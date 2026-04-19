@@ -2,7 +2,9 @@ import axios, { AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import type { ApiError } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// In Docker, nginx proxies /api to gateway, so use empty string (relative path)
+// In development, use localhost:8080 directly
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

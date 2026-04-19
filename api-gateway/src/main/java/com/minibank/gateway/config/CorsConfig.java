@@ -23,11 +23,16 @@ public class CorsConfig {
         CorsConfiguration corsConfig = new CorsConfiguration();
         
         // Allowed origins (configure for production)
-        corsConfig.setAllowedOrigins(Arrays.asList(
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5173"
+        // Using allowedOriginPatterns for wildcard support in Docker environment
+        corsConfig.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "http://localhost",
+                "http://127.0.0.1",
+                "http://frontend",          // Docker service name
+                "http://minibank-frontend", // Docker container name
+                "http://localhost:80",
+                "http://127.0.0.1:80"
         ));
         
         // Allowed methods
