@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { PaginatedResponse, Notification, NotificationType, CreateNotificationRequest } from '../types'
+import type { PaginatedResponse, Notification, CreateNotificationRequest } from '../types'
 
 export type { NotificationType, NotificationStatus } from '../types'
 
