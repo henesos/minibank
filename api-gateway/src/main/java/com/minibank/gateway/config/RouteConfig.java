@@ -8,12 +8,12 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Gateway Route Configuration
- * 
+ *
  * Routes all requests to appropriate microservices:
- * - /api/users/** -> User Service (8081)
- * - /api/accounts/** -> Account Service (8082)
- * - /api/transactions/** -> Transaction Service (8083)
- * - /api/notifications/** -> Notification Service (8084)
+ * - /api/v1/users/** -> User Service (8081)
+ * - /api/v1/accounts/** -> Account Service (8082)
+ * - /api/v1/transactions/** -> Transaction Service (8083)
+ * - /api/v1/notifications/** -> Notification Service (8084)
  */
 @Configuration
 public class RouteConfig {
@@ -33,38 +33,60 @@ public class RouteConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-                // User Service Routes
+                // User Service Routes (v1 API)
                 .route("user-service", r -> r
-                        .path("/api/users/**")
+                        .path("/api/v1/users/**")
                         .filters(f -> f
                                 .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(userServiceUrl))
 
-                // Authentication routes (public)
-                .route("auth-service", r -> r
-                        .path("/api/auth/**")
-                        .filters(f -> f
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
-                        .uri(userServiceUrl))
-
-                // Account Service Routes
+                // Account Service Routes (v1 API)
                 .route("account-service", r -> r
-                        .path("/api/accounts/**")
+                        .path("/api/v1/accounts/**")
                         .filters(f -> f
                                 .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(accountServiceUrl))
 
-                // Transaction Service Routes
+                // Transaction Service Routes (v1 API)
                 .route("transaction-service", r -> r
-                        .path("/api/transactions/**")
+                        .path("/api/v1/transactions/**")
                         .filters(f -> f
                                 .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(transactionServiceUrl))
 
-                // Notification Service Routes
+                // Notification Service Routes (v1 API)
                 .route("notification-service", r -> r
+                        .path("/api/v1/notifications/**")
+                        .filters(f -> f
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
+                        .uri(notificationServiceUrl))
+
+                // Legacy support - rewrite old paths to v1
+                .route("user-service-legacy", r -> r
+                        .path("/api/users/**")
+                        .filters(f -> f
+                                .rewritePath("/api/users/(?<segment>.*)", "/api/v1/users/${segment}")
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
+                        .uri(userServiceUrl))
+
+                .route("account-service-legacy", r -> r
+                        .path("/api/accounts/**")
+                        .filters(f -> f
+                                .rewritePath("/api/accounts/(?<segment>.*)", "/api/v1/accounts/${segment}")
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
+                        .uri(accountServiceUrl))
+
+                .route("transaction-service-legacy", r -> r
+                        .path("/api/transactions/**")
+                        .filters(f -> f
+                                .rewritePath("/api/transactions/(?<segment>.*)", "/api/v1/transactions/${segment}")
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
+                        .uri(transactionServiceUrl))
+
+                .route("notification-service-legacy", r -> r
                         .path("/api/notifications/**")
                         .filters(f -> f
+                                .rewritePath("/api/notifications/(?<segment>.*)", "/api/v1/notifications/${segment}")
                                 .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(notificationServiceUrl))
 
