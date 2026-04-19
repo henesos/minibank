@@ -116,6 +116,23 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     long countUnreadNotifications(@Param("userId") UUID userId);
 
     /**
+     * Counts unread notifications for a user (by read flag).
+     */
+    long countByUserIdAndReadFalse(UUID userId);
+
+    /**
+     * Finds all unread notifications for a user.
+     */
+    List<Notification> findByUserIdAndReadFalseOrderByCreatedAtDesc(UUID userId);
+
+    /**
+     * Marks all notifications as read for a user.
+     */
+    @Modifying
+    @Query("UPDATE Notification n SET n.read = true WHERE n.userId = :userId AND n.read = false")
+    int markAllAsRead(@Param("userId") UUID userId);
+
+    /**
      * Deletes old notifications (for cleanup job).
      */
     @Modifying

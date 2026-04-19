@@ -7,6 +7,8 @@ import {
   Eye,
   EyeOff,
   CheckCircle,
+  Trash2,
+  Ban,
 } from 'lucide-react'
 import { Card, Button, Modal, Select, Spinner } from '../../components/common'
 import { accountsApi } from '../../api'
@@ -18,6 +20,8 @@ const AccountsPage: React.FC = () => {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useNotification()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [showBalances, setShowBalances] = useState(true)
   const [newAccountType, setNewAccountType] = useState<'CHECKING' | 'SAVINGS' | 'BUSINESS'>('CHECKING')
 
@@ -50,12 +54,51 @@ const AccountsPage: React.FC = () => {
     },
   })
 
+  const suspendMutation = useMutation({
+    mutationFn: (id: string) => accountsApi.suspend(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      showSuccess('Account suspended successfully!')
+    },
+    onError: (error: any) => {
+      showError(error.message || 'Failed to suspend account')
+    },
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: (id: string) => accountsApi.close(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      showSuccess('Account closed successfully!')
+      setIsCloseModalOpen(false)
+      setSelectedAccount(null)
+    },
+    onError: (error: any) => {
+      showError(error.message || 'Failed to close account')
+    },
+  })
+
   const handleCreateAccount = () => {
     createMutation.mutate({ accountType: newAccountType, currency: 'USD' })
   }
 
   const handleActivate = (accountId: string) => {
     activateMutation.mutate(accountId)
+  }
+
+  const handleSuspend = (accountId: string) => {
+    suspendMutation.mutate(accountId)
+  }
+
+  const handleCloseAccount = () => {
+    if (selectedAccount) {
+      closeMutation.mutate(selectedAccount.id)
+    }
+  }
+
+  const openCloseModal = (account: Account) => {
+    setSelectedAccount(account)
+    setIsCloseModalOpen(true)
   }
 
   const getAccountColor = (type: string, status: string) => {
@@ -82,7 +125,7 @@ const AccountsPage: React.FC = () => {
     >
       {/* Pending overlay */}
       {account.status === 'PENDING' && (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10">
           <Button
             variant="secondary"
             size="sm"
@@ -107,9 +150,40 @@ const AccountsPage: React.FC = () => {
               ****{account.accountNumber.slice(-4)}
             </p>
           </div>
-          <button className="p-1 rounded hover:bg-white/10">
-            <MoreVertical className="w-5 h-5" />
-          </button>
+          {/* Account Actions Dropdown */}
+          <div className="relative group">
+            <button className="p-1 rounded hover:bg-white/10">
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-8 w-48 bg-white rounded-lg shadow-lg py-1 hidden group-hover:block z-20">
+              {account.status === 'ACTIVE' && (
+                <button
+                  onClick={() => handleSuspend(account.id)}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Ban className="w-4 h-4" />
+                  Suspend Account
+                </button>
+              )}
+              {account.status === 'SUSPENDED' && (
+                <button
+                  onClick={() => handleActivate(account.id)}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Activate Account
+                </button>
+              )}
+              <button
+                onClick={() => openCloseModal(account)}
+                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Close Account
+              </button>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -122,7 +196,7 @@ const AccountsPage: React.FC = () => {
         <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/20">
           <div>
             <p className="text-xs opacity-70">Status</p>
-            <p className={`text-sm font-medium ${account.status === 'ACTIVE' ? 'text-green-300' : account.status === 'PENDING' ? 'text-yellow-300' : ''}`}>
+            <p className={`text-sm font-medium ${account.status === 'ACTIVE' ? 'text-green-300' : account.status === 'PENDING' ? 'text-yellow-300' : account.status === 'SUSPENDED' ? 'text-red-300' : ''}`}>
               {account.status.charAt(0) +
                 account.status.slice(1).toLowerCase()}
             </p>
@@ -228,6 +302,70 @@ const AccountsPage: React.FC = () => {
               onClick={handleCreateAccount}
             >
               Create Account
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Close Account Modal */}
+      <Modal
+        isOpen={isCloseModalOpen}
+        onClose={() => {
+          setIsCloseModalOpen(false)
+          setSelectedAccount(null)
+        }}
+        title="Close Account"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg">
+            <Trash2 className="w-6 h-6 text-red-600" />
+            <div>
+              <p className="font-medium text-red-800">This action cannot be undone</p>
+              <p className="text-sm text-red-600">
+                Account will be permanently closed.
+              </p>
+            </div>
+          </div>
+
+          {selectedAccount && (
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Account to close:</p>
+              <p className="font-medium text-gray-900">
+                {selectedAccount.accountType} - ****{selectedAccount.accountNumber.slice(-4)}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                Balance: {formatCurrency(selectedAccount.balance)}
+              </p>
+            </div>
+          )}
+
+          {selectedAccount && selectedAccount.balance !== 0 && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                This account has a non-zero balance. Please withdraw or transfer all funds before closing.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-6">
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => {
+                setIsCloseModalOpen(false)
+                setSelectedAccount(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              fullWidth
+              isLoading={closeMutation.isPending}
+              onClick={handleCloseAccount}
+              disabled={selectedAccount?.balance !== 0}
+            >
+              Close Account
             </Button>
           </div>
         </div>

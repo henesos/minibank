@@ -30,6 +30,7 @@ public class NotificationResponse {
     private String recipient;
     private Integer retryCount;
     private String errorMessage;
+    private Boolean read;
     private LocalDateTime sentAt;
     private LocalDateTime deliveredAt;
     private LocalDateTime createdAt;
@@ -46,6 +47,7 @@ public class NotificationResponse {
                 .subject(this.subject)
                 .referenceId(this.referenceId)
                 .referenceType(this.referenceType)
+                .read(this.read)
                 .createdAt(this.createdAt)
                 .build();
     }

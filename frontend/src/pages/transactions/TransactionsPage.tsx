@@ -4,12 +4,17 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   ArrowLeftRight,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card, Button, Input, Select, Spinner } from '../../components/common'
 import { accountsApi, transactionsApi } from '../../api'
 import { useNotification } from '../../hooks'
 import { formatCurrency, formatDate } from '../../utils'
-import type { TransferRequest, DepositRequest, WithdrawRequest } from '../../types'
+import type { TransferRequest, DepositRequest, WithdrawRequest, Transaction } from '../../types'
 
 type TransactionTab = 'history' | 'transfer' | 'deposit' | 'withdraw'
 
@@ -138,6 +143,28 @@ const TransactionsPage: React.FC = () => {
     }
   }
 
+  const getStatusBadge = (status: Transaction['status']) => {
+    const statusConfig: Record<Transaction['status'], { color: string; icon: React.ReactNode; label: string }> = {
+      PENDING: { color: 'bg-yellow-100 text-yellow-700', icon: <Clock className="w-3 h-3" />, label: 'Pending' },
+      PROCESSING: { color: 'bg-blue-100 text-blue-700', icon: <Loader2 className="w-3 h-3 animate-spin" />, label: 'Processing' },
+      DEBITED: { color: 'bg-purple-100 text-purple-700', icon: <ArrowUpRight className="w-3 h-3" />, label: 'Debited' },
+      COMPLETED: { color: 'bg-green-100 text-green-700', icon: <CheckCircle className="w-3 h-3" />, label: 'Completed' },
+      FAILED: { color: 'bg-red-100 text-red-700', icon: <XCircle className="w-3 h-3" />, label: 'Failed' },
+      COMPENSATING: { color: 'bg-orange-100 text-orange-700', icon: <Loader2 className="w-3 h-3 animate-spin" />, label: 'Reverting' },
+      COMPENSATED: { color: 'bg-gray-100 text-gray-700', icon: <AlertTriangle className="w-3 h-3" />, label: 'Reverted' },
+      CANCELLED: { color: 'bg-gray-100 text-gray-500', icon: <XCircle className="w-3 h-3" />, label: 'Cancelled' },
+    }
+
+    const config = statusConfig[status] || statusConfig.PENDING
+
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.icon}
+        {config.label}
+      </span>
+    )
+  }
+
   const tabs: { id: TransactionTab; label: string }[] = [
     { id: 'history', label: 'History' },
     { id: 'transfer', label: 'Transfer' },
@@ -189,13 +216,21 @@ const TransactionsPage: React.FC = () => {
                       {getTransactionIcon(transaction.type)}
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">
-                        {transaction.type.charAt(0) +
-                          transaction.type.slice(1).toLowerCase()}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">
+                          {transaction.type.charAt(0) +
+                            transaction.type.slice(1).toLowerCase()}
+                        </p>
+                        {getStatusBadge(transaction.status)}
+                      </div>
                       <p className="text-sm text-gray-500">
                         {transaction.description || 'No description'}
                       </p>
+                      {transaction.failureReason && (
+                        <p className="text-xs text-red-500 mt-1">
+                          {transaction.failureReason}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

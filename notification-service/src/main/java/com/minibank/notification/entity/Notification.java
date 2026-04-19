@@ -143,6 +143,13 @@ public class Notification {
     private String metadata;
 
     /**
+     * Whether the notification has been read by the user
+     */
+    @Column(name = "is_read", nullable = false)
+    @Builder.Default
+    private Boolean read = false;
+
+    /**
      * Soft delete flag
      */
     @Column(name = "deleted", nullable = false)
@@ -241,5 +248,19 @@ public class Notification {
      */
     public void softDelete() {
         this.deleted = true;
+    }
+
+    /**
+     * Marks the notification as read.
+     */
+    public void markAsRead() {
+        this.read = true;
+    }
+
+    /**
+     * Marks the notification as unread.
+     */
+    public void markAsUnread() {
+        this.read = false;
     }
 }

@@ -322,9 +322,89 @@ public class NotificationService {
                 .recipient(notification.getRecipient())
                 .retryCount(notification.getRetryCount())
                 .errorMessage(notification.getErrorMessage())
+                .read(notification.getRead())
                 .sentAt(notification.getSentAt())
                 .deliveredAt(notification.getDeliveredAt())
                 .createdAt(notification.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Marks a notification as read.
+     * 
+     * @param notificationId notification to mark as read
+     * @return updated notification response
+     */
+    @Transactional
+    public NotificationResponse markAsRead(UUID notificationId) {
+        log.debug("Marking notification as read: {}", notificationId);
+
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new NotificationNotFoundException(notificationId));
+
+        notification.markAsRead();
+        notification = notificationRepository.save(notification);
+        
+        log.info("Notification {} marked as read", notificationId);
+        return toResponse(notification);
+    }
+
+    /**
+     * Marks all notifications as read for a user.
+     * 
+     * @param userId user whose notifications to mark as read
+     * @return number of notifications marked as read
+     */
+    @Transactional
+    public int markAllAsRead(UUID userId) {
+        log.debug("Marking all notifications as read for user: {}", userId);
+        
+        int count = notificationRepository.markAllAsRead(userId);
+        log.info("Marked {} notifications as read for user: {}", count, userId);
+        
+        return count;
+    }
+
+    /**
+     * Gets unread notification count for a user.
+     * 
+     * @param userId user to get count for
+     * @return number of unread notifications
+     */
+    @Transactional(readOnly = true)
+    public long getUnreadCount(UUID userId) {
+        return notificationRepository.countByUserIdAndReadFalse(userId);
+    }
+
+    /**
+     * Gets all unread notifications for a user.
+     * 
+     * @param userId user to get notifications for
+     * @return list of unread notifications
+     */
+    @Transactional(readOnly = true)
+    public List<NotificationResponse> getUnreadNotifications(UUID userId) {
+        return notificationRepository.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Soft deletes a notification.
+     * 
+     * @param notificationId notification to delete
+     */
+    @Transactional
+    public void deleteNotification(UUID notificationId) {
+        log.debug("Deleting notification: {}", notificationId);
+
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new NotificationNotFoundException(notificationId));
+
+        notification.softDelete();
+        notificationRepository.save(notification);
+        
+        log.info("Notification {} soft deleted", notificationId);
     }
 }

@@ -90,6 +90,37 @@ export interface WithdrawRequest {
   description?: string
 }
 
+// Notification types
+export type NotificationType = 'EMAIL' | 'SMS' | 'PUSH' | 'IN_APP'
+export type NotificationStatus = 'PENDING' | 'SENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'CANCELLED'
+
+export interface Notification {
+  id: string
+  userId: string
+  type: NotificationType
+  status: NotificationStatus
+  subject: string
+  content: string
+  recipient: string
+  read: boolean
+  referenceId?: string
+  referenceType?: string
+  retryCount: number
+  errorMessage?: string
+  sentAt?: string
+  deliveredAt?: string
+  createdAt: string
+}
+
+export interface CreateNotificationRequest {
+  userId: string
+  type: NotificationType
+  subject: string
+  content: string
+  recipient: string
+  idempotencyKey?: string
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data: T

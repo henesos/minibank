@@ -29,6 +29,21 @@ export const transactionsApi = {
     return response.data
   },
 
+  getBySagaId: async (sagaId: string): Promise<Transaction> => {
+    const response = await apiClient.get<Transaction>(`/api/v1/transactions/saga/${sagaId}`)
+    return response.data
+  },
+
+  getByUserId: async (userId: string): Promise<Transaction[]> => {
+    const response = await apiClient.get<Transaction[]>(`/api/v1/transactions/user/${userId}`)
+    return response.data
+  },
+
+  getByAccountId: async (accountId: string): Promise<Transaction[]> => {
+    const response = await apiClient.get<Transaction[]>(`/api/v1/transactions/account/${accountId}`)
+    return response.data
+  },
+
   transfer: async (data: TransferRequest): Promise<Transaction> => {
     // First, get the destination account ID from account number
     const accountResponse = await apiClient.get<Account>(`/api/v1/accounts/number/${data.toAccountNumber}`)

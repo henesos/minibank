@@ -156,4 +156,96 @@ public class NotificationController {
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Notification Service is healthy");
     }
+
+    /**
+     * Gets unread notification count for a user.
+     */
+    @GetMapping("/user/{userId}/unread/count")
+    @Operation(summary = "Get unread count", description = "Gets the count of unread notifications for a user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Unread count retrieved")
+    })
+    public ResponseEntity<Long> getUnreadCount(
+            @Parameter(description = "User ID") 
+            @PathVariable("userId") UUID userId) {
+        
+        log.debug("Getting unread count for user: {}", userId);
+        
+        long count = notificationService.getUnreadCount(userId);
+        return ResponseEntity.ok(count);
+    }
+
+    /**
+     * Gets all unread notifications for a user.
+     */
+    @GetMapping("/user/{userId}/unread")
+    @Operation(summary = "Get unread notifications", description = "Gets all unread notifications for a user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Unread notifications retrieved")
+    })
+    public ResponseEntity<List<NotificationResponse>> getUnreadNotifications(
+            @Parameter(description = "User ID") 
+            @PathVariable("userId") UUID userId) {
+        
+        log.debug("Getting unread notifications for user: {}", userId);
+        
+        List<NotificationResponse> notifications = notificationService.getUnreadNotifications(userId);
+        return ResponseEntity.ok(notifications);
+    }
+
+    /**
+     * Marks a notification as read.
+     */
+    @PutMapping("/{notificationId}/read")
+    @Operation(summary = "Mark as read", description = "Marks a notification as read")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Notification marked as read"),
+            @ApiResponse(responseCode = "404", description = "Notification not found")
+    })
+    public ResponseEntity<NotificationResponse> markAsRead(
+            @Parameter(description = "Notification ID") 
+            @PathVariable("notificationId") UUID notificationId) {
+        
+        log.info("Marking notification as read: {}", notificationId);
+        
+        NotificationResponse response = notificationService.markAsRead(notificationId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Marks all notifications as read for a user.
+     */
+    @PutMapping("/user/{userId}/read-all")
+    @Operation(summary = "Mark all as read", description = "Marks all notifications as read for a user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "All notifications marked as read")
+    })
+    public ResponseEntity<Integer> markAllAsRead(
+            @Parameter(description = "User ID") 
+            @PathVariable("userId") UUID userId) {
+        
+        log.info("Marking all notifications as read for user: {}", userId);
+        
+        int count = notificationService.markAllAsRead(userId);
+        return ResponseEntity.ok(count);
+    }
+
+    /**
+     * Deletes a notification (soft delete).
+     */
+    @DeleteMapping("/{notificationId}")
+    @Operation(summary = "Delete notification", description = "Soft deletes a notification")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Notification deleted"),
+            @ApiResponse(responseCode = "404", description = "Notification not found")
+    })
+    public ResponseEntity<Void> deleteNotification(
+            @Parameter(description = "Notification ID") 
+            @PathVariable("notificationId") UUID notificationId) {
+        
+        log.info("Deleting notification: {}", notificationId);
+        
+        notificationService.deleteNotification(notificationId);
+        return ResponseEntity.noContent().build();
+    }
 }
