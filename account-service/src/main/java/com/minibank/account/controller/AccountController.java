@@ -2,6 +2,7 @@ package com.minibank.account.controller;
 
 import com.minibank.account.dto.*;
 import com.minibank.account.service.AccountService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,26 @@ import java.util.UUID;
 public class AccountController {
 
     private final AccountService accountService;
+
+    /**
+     * Get all accounts for the authenticated user.
+     * Uses X-User-ID header from API Gateway (extracted from JWT).
+     */
+    @GetMapping
+    public ResponseEntity<List<AccountResponse>> getMyAccounts(HttpServletRequest request) {
+        String userIdHeader = request.getHeader("X-User-ID");
+        
+        if (userIdHeader == null || userIdHeader.isEmpty()) {
+            log.warn("X-User-ID header missing");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        UUID userId = UUID.fromString(userIdHeader);
+        log.debug("Get accounts for authenticated user: {}", userId);
+        
+        List<AccountResponse> accounts = accountService.getAccountsByUserId(userId);
+        return ResponseEntity.ok(accounts);
+    }
 
     /**
      * Create a new account.

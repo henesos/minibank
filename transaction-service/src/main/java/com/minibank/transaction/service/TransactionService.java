@@ -12,6 +12,9 @@ import com.minibank.transaction.saga.SagaOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -208,6 +211,21 @@ public class TransactionService {
         return transactionRepository.findByUserId(userId).stream()
                 .map(TransactionResponse::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Gets all transactions for a user with pagination.
+     * 
+     * @param userId user ID
+     * @param page page number (0-indexed)
+     * @param size page size
+     * @return page of transactions
+     */
+    @Transactional(readOnly = true)
+    public Page<TransactionResponse> getTransactionsByUserIdPaginated(UUID userId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Transaction> transactionPage = transactionRepository.findByUserIdPaginated(userId, pageable);
+        return transactionPage.map(TransactionResponse::fromEntity);
     }
 
     /**

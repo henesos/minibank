@@ -3,9 +3,11 @@ package com.minibank.transaction.controller;
 import com.minibank.transaction.dto.TransactionResponse;
 import com.minibank.transaction.dto.TransferRequest;
 import com.minibank.transaction.service.TransactionService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +34,35 @@ import java.util.UUID;
 public class TransactionController {
 
     private final TransactionService transactionService;
+
+    /**
+     * Get all transactions for the authenticated user with pagination.
+     * Uses X-User-ID header from API Gateway (extracted from JWT).
+     * 
+     * @param request HTTP request to get X-User-ID header
+     * @param page page number (default 0)
+     * @param size page size (default 20)
+     * @return page of transactions
+     */
+    @GetMapping
+    public ResponseEntity<Page<TransactionResponse>> getMyTransactions(
+            HttpServletRequest request,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        String userIdHeader = request.getHeader("X-User-ID");
+        
+        if (userIdHeader == null || userIdHeader.isEmpty()) {
+            log.warn("X-User-ID header missing");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        UUID userId = UUID.fromString(userIdHeader);
+        log.debug("Get transactions for authenticated user: {}, page: {}, size: {}", userId, page, size);
+        
+        Page<TransactionResponse> transactions = transactionService.getTransactionsByUserIdPaginated(userId, page, size);
+        return ResponseEntity.ok(transactions);
+    }
 
     /**
      * Initiate a new money transfer.

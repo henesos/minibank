@@ -1,6 +1,8 @@
 package com.minibank.transaction.repository;
 
 import com.minibank.transaction.entity.Transaction;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -66,6 +68,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
      */
     @Query("SELECT t FROM Transaction t WHERE t.fromUserId = :userId OR t.toUserId = :userId")
     List<Transaction> findByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Finds all transactions for a user with pagination.
+     * 
+     * @param userId the user ID
+     * @param pageable pagination parameters
+     * @return page of transactions
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.fromUserId = :userId OR t.toUserId = :userId ORDER BY t.createdAt DESC")
+    Page<Transaction> findByUserIdPaginated(@Param("userId") UUID userId, Pageable pageable);
 
     /**
      * Finds transactions by status.

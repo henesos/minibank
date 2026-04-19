@@ -4,7 +4,6 @@ import type {
   TransferRequest,
   DepositRequest,
   WithdrawRequest,
-  ApiResponse,
   PaginatedResponse,
 } from '../types'
 
@@ -25,22 +24,37 @@ export const transactionsApi = {
   },
 
   getById: async (id: string): Promise<Transaction> => {
-    const response = await apiClient.get<ApiResponse<Transaction>>(`/api/v1/transactions/${id}`)
-    return response.data.data
+    const response = await apiClient.get<Transaction>(`/api/v1/transactions/${id}`)
+    return response.data
   },
 
   transfer: async (data: TransferRequest): Promise<Transaction> => {
-    const response = await apiClient.post<ApiResponse<Transaction>>('/api/v1/transactions/transfer', data)
-    return response.data.data
+    // Transfer is initiated via POST /api/v1/transactions
+    const response = await apiClient.post<Transaction>('/api/v1/transactions', {
+      fromAccountId: data.fromAccountId,
+      toAccountId: data.toAccountNumber, // Note: toAccountNumber is actually accountId
+      amount: data.amount,
+      description: data.description,
+      currency: 'TRY',
+    })
+    return response.data
   },
 
   deposit: async (data: DepositRequest): Promise<Transaction> => {
-    const response = await apiClient.post<ApiResponse<Transaction>>('/api/v1/transactions/deposit', data)
-    return response.data.data
+    // Deposit via account service
+    const response = await apiClient.post<Transaction>(
+      `/api/v1/accounts/${data.accountId}/deposit`,
+      { amount: data.amount, description: data.description }
+    )
+    return response.data
   },
 
   withdraw: async (data: WithdrawRequest): Promise<Transaction> => {
-    const response = await apiClient.post<ApiResponse<Transaction>>('/api/v1/transactions/withdraw', data)
-    return response.data.data
+    // Withdraw via account service
+    const response = await apiClient.post<Transaction>(
+      `/api/v1/accounts/${data.accountId}/withdraw`,
+      { amount: data.amount, description: data.description }
+    )
+    return response.data
   },
 }
