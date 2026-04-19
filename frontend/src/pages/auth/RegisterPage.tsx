@@ -22,7 +22,16 @@ const RegisterPage: React.FC = () => {
   const { register: registerUser, isAuthenticated, isLoading } = useAuth();
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({ resolver: zodResolver(registerSchema) });
 
-  const onSubmit = (data: RegisterFormData) => registerUser({ firstName: data.firstName, lastName: data.lastName, email: data.email, phoneNumber: data.phone, password: data.password });
+  const onSubmit = (data: RegisterFormData) => {
+    console.log('Register attempt:', data);
+    registerUser({ firstName: data.firstName, lastName: data.lastName, email: data.email, phoneNumber: data.phone, password: data.password });
+  };
+
+  // Prevent form from refreshing page
+  const onFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSubmit(onSubmit)();
+  };
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
@@ -35,7 +44,7 @@ const RegisterPage: React.FC = () => {
           <p className="text-primary-100 mt-2">Join MiniBank today</p>
         </div>
         <Card>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={onFormSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <Input label="First Name" placeholder="John" leftIcon={<User className="w-5 h-5" />} error={errors.firstName?.message} {...register('firstName')} />
               <Input label="Last Name" placeholder="Doe" error={errors.lastName?.message} {...register('lastName')} />
