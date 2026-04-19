@@ -37,11 +37,7 @@ public class RouteConfig {
                 .route("user-service", r -> r
                         .path("/api/users/**")
                         .filters(f -> f
-                                .stripPrefix(0)
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("userServiceCircuitBreaker")
-                                        .setFallbackUri("forward:/fallback/user")))
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(userServiceUrl))
 
                 // Authentication routes (public)
@@ -55,33 +51,21 @@ public class RouteConfig {
                 .route("account-service", r -> r
                         .path("/api/accounts/**")
                         .filters(f -> f
-                                .stripPrefix(0)
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("accountServiceCircuitBreaker")
-                                        .setFallbackUri("forward:/fallback/account")))
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(accountServiceUrl))
 
                 // Transaction Service Routes
                 .route("transaction-service", r -> r
                         .path("/api/transactions/**")
                         .filters(f -> f
-                                .stripPrefix(0)
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("transactionServiceCircuitBreaker")
-                                        .setFallbackUri("forward:/fallback/transaction")))
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(transactionServiceUrl))
 
                 // Notification Service Routes
                 .route("notification-service", r -> r
                         .path("/api/notifications/**")
                         .filters(f -> f
-                                .stripPrefix(0)
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("notificationServiceCircuitBreaker")
-                                        .setFallbackUri("forward:/fallback/notification")))
+                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway"))
                         .uri(notificationServiceUrl))
 
                 // Swagger UI Aggregation routes

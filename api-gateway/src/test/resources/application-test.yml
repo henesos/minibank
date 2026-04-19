@@ -1,28 +1,22 @@
 server:
-  port: 8080
+  port: 0
 
 spring:
   application:
-    name: api-gateway
+    name: api-gateway-test
 
   cloud:
     gateway:
-      # Rate limiting disabled for local development
-      # default-filters:
-      #   - name: RequestRateLimiter
-      #     args:
-      #       redis-rate-limiter.replenishRate: 100
-      #       redis-rate-limiter.burstCapacity: 200
-      #       key-resolver: "#{@ipKeyResolver}"
+      # Disable rate limiting and other filters for tests
+      default-filters: []
 
-  # Redis configuration (optional)
+  # Disable Redis for tests
   data:
     redis:
       host: localhost
       port: 6379
-      timeout: 5000ms
 
-# Service URLs
+# Service URLs (mock for tests)
 services:
   user-service:
     url: http://localhost:8081
@@ -42,16 +36,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info
   endpoint:
     health:
-      show-details: when_authorized
-    gateway:
-      enabled: true
+      show-details: always
 
 # Logging
 logging:
   level:
-    root: INFO
+    root: WARN
     com.minibank.gateway: DEBUG
-    org.springframework.cloud.gateway: INFO
+    org.springframework.cloud.gateway: WARN
+    io.lettuce: WARN
+    io.micrometer: WARN
