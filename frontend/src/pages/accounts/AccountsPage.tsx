@@ -6,12 +6,13 @@ import {
   MoreVertical,
   Eye,
   EyeOff,
+  CheckCircle,
 } from 'lucide-react'
 import { Card, Button, Modal, Select, Spinner } from '../../components/common'
 import { accountsApi } from '../../api'
 import { useNotification } from '../../hooks'
 import { formatCurrency, formatDateShort } from '../../utils'
-import type { CreateAccountRequest } from '../../types'
+import type { CreateAccountRequest, Account } from '../../types'
 
 const AccountsPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -38,11 +39,29 @@ const AccountsPage: React.FC = () => {
     },
   })
 
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => accountsApi.activate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      showSuccess('Account activated successfully!')
+    },
+    onError: (error: any) => {
+      showError(error.message || 'Failed to activate account')
+    },
+  })
+
   const handleCreateAccount = () => {
     createMutation.mutate({ accountType: newAccountType, currency: 'USD' })
   }
 
-  const getAccountColor = (type: string) => {
+  const handleActivate = (accountId: string) => {
+    activateMutation.mutate(accountId)
+  }
+
+  const getAccountColor = (type: string, status: string) => {
+    if (status === 'PENDING' || status === 'DORMANT' || status === 'SUSPENDED') {
+      return 'from-gray-400 to-gray-600'
+    }
     switch (type) {
       case 'CHECKING':
         return 'from-blue-500 to-blue-700'
@@ -54,6 +73,70 @@ const AccountsPage: React.FC = () => {
         return 'from-gray-500 to-gray-700'
     }
   }
+
+  const renderAccountCard = (account: Account) => (
+    <Card
+      key={account.id}
+      className={`bg-gradient-to-br ${getAccountColor(account.accountType, account.status)} text-white overflow-hidden relative`}
+      padding="none"
+    >
+      {/* Pending overlay */}
+      {account.status === 'PENDING' && (
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleActivate(account.id)}
+            isLoading={activateMutation.isPending}
+            className="bg-white text-gray-900 hover:bg-gray-100"
+          >
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Activate Account
+          </Button>
+        </div>
+      )}
+      <div className="p-6">
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <p className="text-sm opacity-80">
+              {account.accountType.charAt(0) +
+                account.accountType.slice(1).toLowerCase()}{' '}
+              Account
+            </p>
+            <p className="text-lg font-medium mt-1">
+              ****{account.accountNumber.slice(-4)}
+            </p>
+          </div>
+          <button className="p-1 rounded hover:bg-white/10">
+            <MoreVertical className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div>
+          <p className="text-sm opacity-80">Balance</p>
+          <p className="text-3xl font-bold mt-1">
+            {showBalances ? formatCurrency(account.balance) : '••••••'}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/20">
+          <div>
+            <p className="text-xs opacity-70">Status</p>
+            <p className={`text-sm font-medium ${account.status === 'ACTIVE' ? 'text-green-300' : account.status === 'PENDING' ? 'text-yellow-300' : ''}`}>
+              {account.status.charAt(0) +
+                account.status.slice(1).toLowerCase()}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs opacity-70">Created</p>
+            <p className="text-sm font-medium">
+              {formatDateShort(account.createdAt)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
@@ -88,54 +171,7 @@ const AccountsPage: React.FC = () => {
         </div>
       ) : accounts && accounts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {accounts.map((account) => (
-            <Card
-              key={account.id}
-              className={`bg-gradient-to-br ${getAccountColor(account.accountType)} text-white overflow-hidden`}
-              padding="none"
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-8">
-                  <div>
-                    <p className="text-sm opacity-80">
-                      {account.accountType.charAt(0) +
-                        account.accountType.slice(1).toLowerCase()}{' '}
-                      Account
-                    </p>
-                    <p className="text-lg font-medium mt-1">
-                      ****{account.accountNumber.slice(-4)}
-                    </p>
-                  </div>
-                  <button className="p-1 rounded hover:bg-white/10">
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div>
-                  <p className="text-sm opacity-80">Balance</p>
-                  <p className="text-3xl font-bold mt-1">
-                    {showBalances ? formatCurrency(account.balance) : '••••••'}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/20">
-                  <div>
-                    <p className="text-xs opacity-70">Status</p>
-                    <p className="text-sm font-medium">
-                      {account.status.charAt(0) +
-                        account.status.slice(1).toLowerCase()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs opacity-70">Created</p>
-                    <p className="text-sm font-medium">
-                      {formatDateShort(account.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
+          {accounts.map((account) => renderAccountCard(account))}
         </div>
       ) : (
         <Card>

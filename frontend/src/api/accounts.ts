@@ -17,6 +17,16 @@ export const accountsApi = {
     return response.data
   },
 
+  activate: async (id: string): Promise<Account> => {
+    const response = await apiClient.post<Account>(`/api/v1/accounts/${id}/activate`)
+    return response.data
+  },
+
+  suspend: async (id: string): Promise<Account> => {
+    const response = await apiClient.post<Account>(`/api/v1/accounts/${id}/suspend`)
+    return response.data
+  },
+
   getTransactions: async (accountId: string, page = 0, size = 10): Promise<PaginatedResponse<Transaction>> => {
     const response = await apiClient.get<PaginatedResponse<Transaction>>(
       `/api/v1/accounts/${accountId}/transactions`,

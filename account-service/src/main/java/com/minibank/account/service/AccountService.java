@@ -52,7 +52,7 @@ public class AccountService {
         // Generate unique account number
         String accountNumber = generateAccountNumber();
 
-        // Create account
+        // Create account - ACTIVE by default for immediate use
         Account account = Account.builder()
                 .userId(request.getUserId())
                 .accountNumber(accountNumber)
@@ -62,7 +62,7 @@ public class AccountService {
                 .currency(request.getCurrency() != null ? request.getCurrency() : "TRY")
                 .name(request.getName())
                 .description(request.getDescription())
-                .status(Account.AccountStatus.PENDING)
+                .status(Account.AccountStatus.ACTIVE)
                 .build();
 
         account = accountRepository.save(account);

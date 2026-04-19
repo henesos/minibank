@@ -42,9 +42,9 @@ export interface Account {
   accountType: 'CHECKING' | 'SAVINGS' | 'BUSINESS'
   balance: number
   currency: string
-  status: 'ACTIVE' | 'INACTIVE' | 'FROZEN' | 'CLOSED'
+  status: 'PENDING' | 'ACTIVE' | 'DORMANT' | 'SUSPENDED' | 'CLOSED'
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface CreateAccountRequest {
