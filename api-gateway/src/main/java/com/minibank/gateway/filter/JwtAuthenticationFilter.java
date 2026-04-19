@@ -44,8 +44,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     // Public endpoints that don't require authentication
     private static final List<String> PUBLIC_ENDPOINTS = List.of(
-            "/api/auth/login",
-            "/api/auth/register",
+            "/api/v1/users/login",      // Login endpoint
+            "/api/v1/users/register",   // Register endpoint
+            "/api/auth/login",          // Legacy login
+            "/api/auth/register",       // Legacy register
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs",
@@ -53,7 +55,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/swagger-account",
             "/swagger-transaction",
             "/swagger-notification",
-            "/fallback"
+            "/fallback",
+            "/health"
     );
 
     @Override
@@ -62,6 +65,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String path = request.getPath().value();
 
         log.debug("Processing request: {} {}", request.getMethod(), path);
+
+        // Skip authentication for CORS preflight requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod().name())) {
+            log.debug("OPTIONS request, skipping authentication: {}", path);
+            return chain.filter(exchange);
+        }
 
         // Skip authentication for public endpoints
         if (isPublicEndpoint(path)) {
