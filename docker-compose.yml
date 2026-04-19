@@ -2,6 +2,29 @@ version: '3.8'
 
 services:
   # ═══════════════════════════════════════════════════════════════════════
+  # Frontend (React + Vite + Nginx) - Port 80
+  # ═══════════════════════════════════════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: minibank-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - minibank-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
   # API Gateway (Spring Cloud Gateway) - Port 8080
   # ═══════════════════════════════════════════════════════════════════════
   api-gateway:
