@@ -2,8 +2,9 @@ package com.minibank.account.unit;
 
 import com.minibank.account.dto.*;
 import com.minibank.account.entity.Account;
+import com.minibank.account.exception.AccessDeniedException;
 import com.minibank.account.exception.AccountNotFoundException;
-import com.minibank.account.exception.InsufficientBalanceException;
+import com.minibank.account.exception.InactiveAccountException;
 import com.minibank.account.repository.AccountRepository;
 import com.minibank.account.service.AccountService;
 import org.junit.jupiter.api.BeforeEach;
@@ -329,6 +330,113 @@ class AccountServiceTest {
             verify(accountRepository).save(argThat(acc -> 
                 acc.getStatus() == Account.AccountStatus.SUSPENDED
             ));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Authorization Tests (S2 — Ownership Verification)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Authorization — Ownership Checks")
+    class AuthorizationTests {
+
+        @Test
+        @DisplayName("isAccountOwner returns true when account belongs to user")
+        void isAccountOwner_True() {
+            when(accountRepository.existsByIdAndUserId(testAccountId, testUserId)).thenReturn(true);
+            assertTrue(accountService.isAccountOwner(testAccountId, testUserId));
+        }
+
+        @Test
+        @DisplayName("isAccountOwner returns false when account belongs to another user")
+        void isAccountOwner_False() {
+            UUID otherUserId = UUID.randomUUID();
+            when(accountRepository.existsByIdAndUserId(testAccountId, otherUserId)).thenReturn(false);
+            assertFalse(accountService.isAccountOwner(testAccountId, otherUserId));
+        }
+
+        @Test
+        @DisplayName("getAccountByIdForUser returns account when owner matches")
+        void getAccountByIdForUser_Owner_Success() {
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+
+            AccountResponse response = accountService.getAccountByIdForUser(testAccountId, testUserId);
+
+            assertNotNull(response);
+            assertEquals(testAccountId, response.getId());
+            assertEquals(testUserId, response.getUserId());
+        }
+
+        @Test
+        @DisplayName("getAccountByIdForUser throws AccessDeniedException when non-owner")
+        void getAccountByIdForUser_NonOwner_ThrowsAccessDenied() {
+            UUID otherUserId = UUID.randomUUID();
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+
+            assertThrows(AccessDeniedException.class,
+                    () -> accountService.getAccountByIdForUser(testAccountId, otherUserId));
+        }
+
+        @Test
+        @DisplayName("getAccountByIdForUser throws AccountNotFoundException when account missing")
+        void getAccountByIdForUser_NotFound_ThrowsNotFound() {
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.empty());
+
+            assertThrows(AccountNotFoundException.class,
+                    () -> accountService.getAccountByIdForUser(testAccountId, testUserId));
+        }
+
+        @Test
+        @DisplayName("getAccountByNumberForUser returns account when owner matches")
+        void getAccountByNumberForUser_Owner_Success() {
+            when(accountRepository.findByAccountNumber("MB1234567890")).thenReturn(Optional.of(testAccount));
+
+            AccountResponse response = accountService.getAccountByNumberForUser("MB1234567890", testUserId);
+
+            assertNotNull(response);
+            assertEquals("MB1234567890", response.getAccountNumber());
+        }
+
+        @Test
+        @DisplayName("getAccountByNumberForUser throws AccessDeniedException when non-owner")
+        void getAccountByNumberForUser_NonOwner_ThrowsAccessDenied() {
+            UUID otherUserId = UUID.randomUUID();
+            when(accountRepository.findByAccountNumber("MB1234567890")).thenReturn(Optional.of(testAccount));
+
+            assertThrows(AccessDeniedException.class,
+                    () -> accountService.getAccountByNumberForUser("MB1234567890", otherUserId));
+        }
+
+        @Test
+        @DisplayName("validateAccountOwnership returns account when owner and active")
+        void validateAccountOwnership_ActiveOwner_Success() {
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+
+            Account result = accountService.validateAccountOwnership(testAccountId, testUserId);
+
+            assertNotNull(result);
+            assertEquals(testAccountId, result.getId());
+        }
+
+        @Test
+        @DisplayName("validateAccountOwnership throws AccessDeniedException when non-owner")
+        void validateAccountOwnership_NonOwner_ThrowsAccessDenied() {
+            UUID otherUserId = UUID.randomUUID();
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+
+            assertThrows(AccessDeniedException.class,
+                    () -> accountService.validateAccountOwnership(testAccountId, otherUserId));
+        }
+
+        @Test
+        @DisplayName("validateAccountOwnership throws InactiveAccountException when account suspended")
+        void validateAccountOwnership_Suspended_ThrowsInactive() {
+            testAccount.setStatus(Account.AccountStatus.SUSPENDED);
+            when(accountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+
+            assertThrows(InactiveAccountException.class,
+                    () -> accountService.validateAccountOwnership(testAccountId, testUserId));
         }
     }
 }

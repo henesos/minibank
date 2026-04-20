@@ -2,6 +2,7 @@ package com.minibank.account.service;
 
 import com.minibank.account.dto.*;
 import com.minibank.account.entity.Account;
+import com.minibank.account.exception.AccessDeniedException;
 import com.minibank.account.exception.*;
 import com.minibank.account.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -318,7 +319,7 @@ public class AccountService {
 
     /**
      * Checks if an account belongs to a user.
-     * 
+     *
      * @param accountId account ID
      * @param userId user ID
      * @return true if account belongs to user
@@ -326,5 +327,76 @@ public class AccountService {
     @Transactional(readOnly = true)
     public boolean isAccountOwner(UUID accountId, UUID userId) {
         return accountRepository.existsByIdAndUserId(accountId, userId);
+    }
+
+    /**
+     * Gets an account by ID after verifying ownership.
+     *
+     * <p>Use this method when the caller is an authenticated user (not an internal service).
+     * Verifies that the account belongs to the requesting user before returning data.</p>
+     *
+     * @param accountId account ID
+     * @param userId the authenticated user's ID (from JWT / X-User-ID header)
+     * @return account response
+     * @throws AccountNotFoundException if account does not exist
+     * @throws AccessDeniedException if user does not own the account
+     */
+    @Transactional(readOnly = true)
+    public AccountResponse getAccountByIdForUser(UUID accountId, UUID userId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        if (!account.getUserId().equals(userId)) {
+            throw new AccessDeniedException(accountId, userId);
+        }
+        return AccountResponse.fromEntity(account);
+    }
+
+    /**
+     * Gets an account by account number after verifying ownership.
+     *
+     * <p>Use this method when the caller is an authenticated user (not an internal service).
+     * Verifies that the account belongs to the requesting user before returning data.</p>
+     *
+     * @param accountNumber account number
+     * @param userId the authenticated user's ID (from JWT / X-User-ID header)
+     * @return account response
+     * @throws AccountNotFoundException if account does not exist
+     * @throws AccessDeniedException if user does not own the account
+     */
+    @Transactional(readOnly = true)
+    public AccountResponse getAccountByNumberForUser(String accountNumber, UUID userId) {
+        Account account = accountRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new AccountNotFoundException(accountNumber));
+        if (!account.getUserId().equals(userId)) {
+            throw new AccessDeniedException(account.getId(), userId);
+        }
+        return AccountResponse.fromEntity(account);
+    }
+
+    /**
+     * Validates that an account exists, is active, and belongs to the given user.
+     *
+     * <p>Throws the appropriate exception for each failure case:
+     * <ul>
+     *   <li>{@link AccountNotFoundException} — account does not exist</li>
+     *   <li>{@link AccessDeniedException} — user does not own the account</li>
+     *   <li>{@link InactiveAccountException} — account is not active</li>
+     * </ul></p>
+     *
+     * @param accountId account ID
+     * @param userId the authenticated user's ID
+     * @return the account entity (for further processing in the calling method)
+     */
+    @Transactional(readOnly = true)
+    public Account validateAccountOwnership(UUID accountId, UUID userId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        if (!account.getUserId().equals(userId)) {
+            throw new AccessDeniedException(accountId, userId);
+        }
+        if (!account.isActive()) {
+            throw new InactiveAccountException(accountId, account.getStatus().name());
+        }
+        return account;
     }
 }
