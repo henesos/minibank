@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,6 +40,16 @@ import java.util.stream.Collectors;
 public class AccountService {
 
     private final AccountRepository accountRepository;
+
+    /**
+     * Cryptographically strong random number generator for account number generation.
+     * Class-level singleton to avoid entropy drain from repeated instantiation.
+     * DO NOT use Math.random() or java.util.Random — they are predictable.
+     */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private static final int BASE_DIGIT_COUNT = 10;
+    private static final int MAX_GENERATION_RETRIES = 5;
 
     /**
      * Creates a new account for a user.
@@ -310,11 +321,130 @@ public class AccountService {
     }
 
     /**
-     * Generates a unique account number.
-     * Format: MB + 10 digits (e.g., MB1234567890)
+     * Generates a cryptographically secure, unique account number with Luhn checksum.
+     *
+     * <p>Format: MB + 10 random digits (base) + 1 Luhn check digit = 13 characters total.
+     * Example: MB38472619405 (last digit '5' is the Luhn check digit)</p>
+     *
+     * <p>Algorithm:
+     * <ol>
+     *   <li>Generate 10 random digits using {@link SecureRandom}</li>
+     *   <li>Calculate Luhn check digit over the 10 base digits</li>
+     *   <li>Append check digit to form 11-digit numeric part</li>
+     *   <li>Check uniqueness in DB via {@link AccountRepository#findByAccountNumber(String)}</li>
+     *   <li>On collision, retry up to {@link #MAX_GENERATION_RETRIES} times</li>
+     * </ol></p>
+     *
+     * @return a unique, Luhn-valid account number (13 characters)
+     * @throws AccountServiceException if unique number cannot be generated after max retries
      */
     private String generateAccountNumber() {
-        return "MB" + String.format("%010d", System.currentTimeMillis() % 10000000000L);
+        for (int attempt = 0; attempt < MAX_GENERATION_RETRIES; attempt++) {
+            // 1. Generate 10 random digits using SecureRandom
+            StringBuilder sb = new StringBuilder(BASE_DIGIT_COUNT);
+            for (int i = 0; i < BASE_DIGIT_COUNT; i++) {
+                sb.append(SECURE_RANDOM.nextInt(10));
+            }
+            String baseDigits = sb.toString();
+
+            // 2. Calculate Luhn check digit
+            int checkDigit = calculateLuhnCheckDigit(baseDigits);
+
+            // 3. Form full account number: MB + 10 digits + 1 check digit
+            String accountNumber = "MB" + baseDigits + checkDigit;
+
+            // 4. Check uniqueness in DB
+            if (accountRepository.findByAccountNumber(accountNumber).isEmpty()) {
+                log.info("Generated account number: {} (attempt {})", accountNumber, attempt + 1);
+                return accountNumber;
+            }
+
+            log.warn("Account number collision detected: {} (attempt {} of {})",
+                    accountNumber, attempt + 1, MAX_GENERATION_RETRIES);
+        }
+
+        throw new AccountServiceException(
+                "Failed to generate unique account number after " + MAX_GENERATION_RETRIES + " attempts",
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                "ACCOUNT_NUMBER_GENERATION_FAILED"
+        );
+    }
+
+    /**
+     * Calculates the Luhn check digit for a given base digit string.
+     *
+     * <p>The Luhn algorithm processes digits from right to left, doubling every second
+     * digit (starting from the rightmost). If doubling results in a value greater than 9,
+     * the digits are summed (e.g., 14 → 1+4 = 5). The check digit is chosen so that
+     * the total sum of all digits (including check digit) is divisible by 10.</p>
+     *
+     * <p>Example: For base digits "7992739871", the check digit is 3,
+     * making the full Luhn-valid number "79927398713".</p>
+     *
+     * @param digits the base digits (only numeric characters, e.g. "1234567890")
+     * @return the Luhn check digit (0-9)
+     */
+    private int calculateLuhnCheckDigit(String digits) {
+        int sum = 0;
+        int len = digits.length();
+        for (int i = 0; i < len; i++) {
+            int d = digits.charAt(i) - '0';
+            // Position from the right in the full number (check digit is at position 0)
+            int positionFromRight = len - i;
+            if (positionFromRight % 2 == 1) {
+                d *= 2;
+                if (d > 9) {
+                    d -= 9;
+                }
+            }
+            sum += d;
+        }
+        return (10 - (sum % 10)) % 10;
+    }
+
+    /**
+     * Validates whether the given account number has correct format and passes Luhn check.
+     *
+     * <p>Validation steps:
+     * <ol>
+     *   <li>Format check: starts with "MB", total 13 characters, remaining 11 characters are digits</li>
+     *   <li>Luhn check: the 11-digit numeric portion must pass Luhn validation</li>
+     * </ol></p>
+     *
+     * <p>This method is useful for input validation in transfers, queries, and external
+     * integrations to detect typos and prevent funds from being sent to wrong accounts.</p>
+     *
+     * @param accountNumber the account number to validate
+     * @return true if the account number is valid (correct format and Luhn checksum)
+     */
+    public boolean isValidAccountNumber(String accountNumber) {
+        if (accountNumber == null || accountNumber.length() != 13 || !accountNumber.startsWith("MB")) {
+            return false;
+        }
+
+        String digits = accountNumber.substring(2);
+        // All 11 characters after "MB" must be digits
+        for (int i = 0; i < digits.length(); i++) {
+            if (!Character.isDigit(digits.charAt(i))) {
+                return false;
+            }
+        }
+
+        // Luhn validation on all 11 digits
+        int sum = 0;
+        int len = digits.length();
+        for (int i = 0; i < len; i++) {
+            int d = digits.charAt(i) - '0';
+            int positionFromRight = len - 1 - i; // 0-based from right
+            if (positionFromRight % 2 == 1) {
+                d *= 2;
+                if (d > 9) {
+                    d -= 9;
+                }
+            }
+            sum += d;
+        }
+        return sum % 10 == 0;
     }
 
     /**

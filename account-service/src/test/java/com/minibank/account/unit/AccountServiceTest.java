@@ -4,6 +4,7 @@ import com.minibank.account.dto.*;
 import com.minibank.account.entity.Account;
 import com.minibank.account.exception.AccessDeniedException;
 import com.minibank.account.exception.AccountNotFoundException;
+import com.minibank.account.exception.AccountServiceException;
 import com.minibank.account.exception.InactiveAccountException;
 import com.minibank.account.repository.AccountRepository;
 import com.minibank.account.service.AccountService;
@@ -437,6 +438,121 @@ class AccountServiceTest {
 
             assertThrows(InactiveAccountException.class,
                     () -> accountService.validateAccountOwnership(testAccountId, testUserId));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Account Number Generation Tests (S3 — Secure Generation + Luhn)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Account Number Generation")
+    class AccountNumberGenerationTests {
+
+        @Test
+        @DisplayName("Generated number should be 13 characters (MB + 11 digits)")
+        void accountNumber_Format() {
+            // Arrange — no collision
+            when(accountRepository.findByAccountNumber(anyString())).thenReturn(Optional.empty());
+            when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+                Account acc = invocation.getArgument(0);
+                acc.setId(testAccountId);
+                return acc;
+            });
+
+            AccountCreateRequest request = AccountCreateRequest.builder()
+                    .userId(testUserId)
+                    .accountType("SAVINGS")
+                    .build();
+
+            // Act
+            AccountResponse response = accountService.createAccount(request);
+
+            // Assert — format: MB + 11 digits = 13 characters
+            assertNotNull(response);
+            String accountNumber = response.getAccountNumber();
+            assertEquals(13, accountNumber.length(),
+                    "Account number must be 13 characters (MB + 10 base + 1 check digit)");
+            assertTrue(accountNumber.startsWith("MB"),
+                    "Account number must start with 'MB'");
+            assertTrue(accountNumber.substring(2).matches("\\d{11}"),
+                    "Account number must have exactly 11 digits after 'MB' prefix");
+        }
+
+        @Test
+        @DisplayName("Generated number should pass Luhn check")
+        void accountNumber_LuhnValid() {
+            // Arrange — no collision
+            when(accountRepository.findByAccountNumber(anyString())).thenReturn(Optional.empty());
+            when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+                Account acc = invocation.getArgument(0);
+                acc.setId(testAccountId);
+                return acc;
+            });
+
+            AccountCreateRequest request = AccountCreateRequest.builder()
+                    .userId(testUserId)
+                    .accountType("SAVINGS")
+                    .build();
+
+            // Act
+            AccountResponse response = accountService.createAccount(request);
+
+            // Assert — generated number must pass Luhn validation
+            assertNotNull(response);
+            assertTrue(accountService.isValidAccountNumber(response.getAccountNumber()),
+                    "Generated account number must pass Luhn checksum validation");
+        }
+
+        @Test
+        @DisplayName("Should retry on collision and succeed")
+        void accountNumber_CollisionRetry() {
+            // Arrange — 1st attempt: collision, 2nd attempt: success
+            when(accountRepository.findByAccountNumber(anyString()))
+                    .thenReturn(Optional.of(testAccount))   // 1st attempt: number exists
+                    .thenReturn(Optional.empty());          // 2nd attempt: unique
+            when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+                Account acc = invocation.getArgument(0);
+                acc.setId(testAccountId);
+                return acc;
+            });
+
+            AccountCreateRequest request = AccountCreateRequest.builder()
+                    .userId(testUserId)
+                    .accountType("SAVINGS")
+                    .build();
+
+            // Act
+            AccountResponse response = accountService.createAccount(request);
+
+            // Assert — should have retried once and succeeded
+            assertNotNull(response);
+            verify(accountRepository, times(2)).findByAccountNumber(anyString());
+            verify(accountRepository).save(any(Account.class));
+        }
+
+        @Test
+        @DisplayName("Should throw after 5 collisions")
+        void accountNumber_MaxRetriesExceeded() {
+            // Arrange — all 5 attempts result in collision
+            when(accountRepository.findByAccountNumber(anyString()))
+                    .thenReturn(Optional.of(testAccount));
+
+            AccountCreateRequest request = AccountCreateRequest.builder()
+                    .userId(testUserId)
+                    .accountType("SAVINGS")
+                    .build();
+
+            // Act & Assert
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountService.createAccount(request),
+                    "Should throw AccountServiceException after 5 failed attempts");
+
+            assertEquals("ACCOUNT_NUMBER_GENERATION_FAILED", exception.getErrorCode());
+            assertEquals(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, exception.getStatus());
+            verify(accountRepository, times(5)).findByAccountNumber(anyString());
+            // save should never be called since generation failed
+            verify(accountRepository, never()).save(any(Account.class));
         }
     }
 }
