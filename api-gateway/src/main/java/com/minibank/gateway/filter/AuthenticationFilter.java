@@ -1,5 +1,7 @@
 package com.minibank.gateway.filter;
 
+// JwtUtil is in the same package now
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
@@ -8,18 +10,12 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import lombok.RequiredArgsConstructor;
-
-/**
- * Authentication filter for API Gateway.
- */
 @Component
-@RequiredArgsConstructor
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
-    private final JwtUtil jwtUtil;
+    @Autowired
+    private JwtUtil jwtUtil;
 
-    /** Constructor. */
     public AuthenticationFilter() {
         super(Config.class);
     }
@@ -59,7 +55,6 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         };
     }
 
-    /** Filter configuration class. */
     public static class Config {
         // Configuration properties if needed
     }
