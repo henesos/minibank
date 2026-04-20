@@ -6,6 +6,7 @@ import com.minibank.account.exception.AccessDeniedException;
 import com.minibank.account.exception.AccountNotFoundException;
 import com.minibank.account.exception.AccountServiceException;
 import com.minibank.account.exception.InactiveAccountException;
+import com.minibank.account.exception.InsufficientBalanceException;
 import com.minibank.account.repository.AccountRepository;
 import com.minibank.account.service.AccountService;
 import org.junit.jupiter.api.BeforeEach;
