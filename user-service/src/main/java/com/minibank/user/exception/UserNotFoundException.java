@@ -9,15 +9,17 @@ import java.util.UUID;
  */
 public class UserNotFoundException extends UserServiceException {
 
+    /** Constructor with user ID. */
     public UserNotFoundException(UUID id) {
-        super("User not found with id: " + id, 
-              HttpStatus.NOT_FOUND, 
+        super("User not found with id: " + id,
+              HttpStatus.NOT_FOUND,
               "USER_NOT_FOUND");
     }
 
+    /** Constructor with user email. */
     public UserNotFoundException(String email) {
-        super("User not found with email: " + email, 
-              HttpStatus.NOT_FOUND, 
+        super("User not found with email: " + email,
+              HttpStatus.NOT_FOUND,
               "USER_NOT_FOUND");
     }
 }

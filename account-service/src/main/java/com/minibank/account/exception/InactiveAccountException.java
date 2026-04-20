@@ -9,15 +9,10 @@ import java.util.UUID;
  */
 public class InactiveAccountException extends AccountServiceException {
 
-    public InactiveAccountException(UUID accountId) {
-        super("Account is not active: " + accountId, 
-              HttpStatus.FORBIDDEN, 
-              "ACCOUNT_INACTIVE");
-    }
-
+    /** Constructor with account ID and status. */
     public InactiveAccountException(UUID accountId, String status) {
-        super("Account is not active. Status: " + status + ", Account: " + accountId, 
-              HttpStatus.FORBIDDEN, 
+        super("Account is not active. Status: " + status + ", Account: " + accountId,
+              HttpStatus.FORBIDDEN,
               "ACCOUNT_INACTIVE");
     }
 }

@@ -7,15 +7,15 @@ import org.springframework.kafka.annotation.EnableKafka;
 
 /**
  * MiniBank Account Service Application
- * 
+ *
  * Handles account management and balance operations.
  * Runs on port 8082 by default.
- * 
+ *
  * Key Features:
  * - Account creation (savings, checking)
  * - Balance management (atomic updates, never cached)
  * - Account status management
- * 
+ *
  * @author MiniBank Team
  */
 @SpringBootApplication
@@ -23,6 +23,7 @@ import org.springframework.kafka.annotation.EnableKafka;
 @EnableKafka
 public class AccountServiceApplication {
 
+    /** Main entry point. @param args command-line arguments */
     public static void main(String[] args) {
         SpringApplication.run(AccountServiceApplication.class, args);
     }

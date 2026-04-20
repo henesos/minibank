@@ -35,7 +35,7 @@ services:
 
 # JWT Configuration
 jwt:
-  secret: minibank-super-secret-key-for-development-only-min-256-bits
+  secret: ${JWT_SECRET}
 
 # Actuator endpoints
 management:

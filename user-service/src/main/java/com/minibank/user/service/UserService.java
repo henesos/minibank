@@ -1,9 +1,5 @@
 package com.minibank.user.service;
 
-import com.minibank.user.dto.*;
-import com.minibank.user.entity.User;
-import com.minibank.user.exception.*;
-import com.minibank.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -15,12 +11,25 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import com.minibank.user.dto.AuthResponse;
+import com.minibank.user.dto.UserLoginRequest;
+import com.minibank.user.dto.UserRegistrationRequest;
+import com.minibank.user.dto.UserResponse;
+import com.minibank.user.dto.UserUpdateRequest;
+import com.minibank.user.entity.User;
+import com.minibank.user.exception.AccountLockedException;
+import com.minibank.user.exception.EmailAlreadyExistsException;
+import com.minibank.user.exception.InvalidCredentialsException;
+import com.minibank.user.exception.UserNotFoundException;
+import com.minibank.user.exception.UserServiceException;
+import com.minibank.user.repository.UserRepository;
+
 /**
  * User Service - Business logic for user management.
- * 
+ *
  * Handles user registration, authentication, and profile management.
  * Implements caching for frequently accessed user data.
- * 
+ *
  * Cache Strategy:
  * - User profile: Cacheable (5 min TTL) - changes rarely
  * - Balance: NEVER cached - managed by Account Service
@@ -40,7 +49,7 @@ public class UserService {
 
     /**
      * Registers a new user.
-     * 
+     *
      * @param request registration request with user details
      * @return created user response
      * @throws EmailAlreadyExistsException if email is already registered
@@ -85,7 +94,7 @@ public class UserService {
 
     /**
      * Authenticates a user and generates JWT tokens.
-     * 
+     *
      * @param request login request with credentials
      * @return authentication response with tokens
      * @throws InvalidCredentialsException if credentials are invalid
@@ -139,7 +148,7 @@ public class UserService {
 
     /**
      * Gets a user by ID with caching.
-     * 
+     *
      * @param id user ID
      * @return user response
      * @throws UserNotFoundException if user not found
@@ -148,16 +157,16 @@ public class UserService {
     @Cacheable(value = "users", key = "#id")
     public UserResponse getUserById(UUID id) {
         log.debug("Fetching user by id: {}", id);
-        
+
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
-        
+
         return UserResponse.fromEntity(user);
     }
 
     /**
      * Gets a user by email.
-     * 
+     *
      * @param email user email
      * @return user response
      * @throws UserNotFoundException if user not found
@@ -165,16 +174,16 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserResponse getUserByEmail(String email) {
         log.debug("Fetching user by email: {}", email);
-        
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException(email));
-        
+
         return UserResponse.fromEntity(user);
     }
 
     /**
      * Updates a user's profile.
-     * 
+     *
      * @param id user ID
      * @param request update request
      * @return updated user response
@@ -189,8 +198,8 @@ public class UserService {
                 .orElseThrow(() -> new UserNotFoundException(id));
 
         // Check if phone is being changed and if it's already taken
-        if (request.getPhone() != null && 
-            !request.getPhone().equals(user.getPhone()) && 
+        if (request.getPhone() != null &&
+            !request.getPhone().equals(user.getPhone()) &&
             userRepository.existsByPhone(request.getPhone())) {
             throw new UserServiceException(
                 "Phone number already in use",
@@ -218,7 +227,7 @@ public class UserService {
 
     /**
      * Soft deletes a user account.
-     * 
+     *
      * @param id user ID
      * @throws UserNotFoundException if user not found
      */
@@ -238,7 +247,7 @@ public class UserService {
 
     /**
      * Verifies a user's email.
-     * 
+     *
      * @param id user ID
      * @throws UserNotFoundException if user not found
      */
@@ -251,7 +260,7 @@ public class UserService {
                 .orElseThrow(() -> new UserNotFoundException(id));
 
         user.setEmailVerified(true);
-        
+
         // Activate account if phone is also verified or not required
         if (user.getPhone() == null || user.getPhoneVerified()) {
             user.setStatus(User.UserStatus.ACTIVE);
@@ -265,7 +274,7 @@ public class UserService {
 
     /**
      * Verifies a user's phone.
-     * 
+     *
      * @param id user ID
      * @throws UserNotFoundException if user not found
      */
@@ -278,7 +287,7 @@ public class UserService {
                 .orElseThrow(() -> new UserNotFoundException(id));
 
         user.setPhoneVerified(true);
-        
+
         // Activate account if email is also verified
         if (user.getEmailVerified()) {
             user.setStatus(User.UserStatus.ACTIVE);
@@ -292,14 +301,14 @@ public class UserService {
 
     /**
      * Validates a JWT token and returns the user.
-     * 
+     *
      * @param token JWT token
      * @return user response
      */
     @Transactional(readOnly = true)
     public UserResponse validateToken(String token) {
         String userId = jwtService.extractUserId(token);
-        
+
         if (userId == null) {
             throw new UserServiceException(
                 "Invalid token",
@@ -313,7 +322,7 @@ public class UserService {
 
     /**
      * Refreshes an access token using a refresh token.
-     * 
+     *
      * @param refreshToken refresh token
      * @return new authentication response
      */

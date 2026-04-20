@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 
 /**
  * DTO for balance update request.
- * 
+ *
  * Used for deposits and withdrawals.
  */
 @Data

@@ -1,7 +1,21 @@
 package com.minibank.transaction.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.data.annotation.CreatedBy;
@@ -16,17 +30,17 @@ import java.util.UUID;
 
 /**
  * Transaction Entity for MiniBank
- * 
+ *
  * Represents a money transfer transaction between accounts.
  * Part of the Saga pattern for distributed transactions.
- * 
+ *
  * TRANSACTION LIFECYCLE:
  * 1. PENDING - Initial state when transaction is created
  * 2. PROCESSING - Saga orchestrator is processing
  * 3. COMPLETED - Successfully completed
  * 4. FAILED - Failed with reason
  * 5. COMPENSATED - Compensation completed
- * 
+ *
  * SAGA STATES:
  * - DEBIT_PENDING -> DEBIT_COMPLETED -> CREDIT_PENDING -> CREDIT_COMPLETED -> COMPLETED
  * - DEBIT_PENDING -> DEBIT_FAILED -> FAILED
@@ -254,8 +268,8 @@ public class Transaction {
      * Checks if transaction can be retried.
      */
     public boolean canRetry(int maxRetries) {
-        return this.retryCount < maxRetries && 
-               (this.status == TransactionStatus.PROCESSING || 
+        return this.retryCount < maxRetries &&
+               (this.status == TransactionStatus.PROCESSING ||
                 this.status == TransactionStatus.FAILED);
     }
 

@@ -8,16 +8,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * MiniBank Transaction Service Application
- * 
+ *
  * Handles money transfers with Saga Orchestrator pattern.
  * Runs on port 8083 by default.
- * 
+ *
  * Key Features:
  * - Money transfers between accounts
  * - Saga Orchestrator for distributed transactions
  * - Outbox Pattern for reliable messaging
  * - Distributed Idempotency
- * 
+ *
  * @author MiniBank Team
  */
 @SpringBootApplication
@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class TransactionServiceApplication {
 
+    /** Main entry point. @param args command-line arguments */
     public static void main(String[] args) {
         SpringApplication.run(TransactionServiceApplication.class, args);
     }
