@@ -5,6 +5,9 @@ import com.minibank.notification.dto.TransactionEvent;
 import com.minibank.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -12,13 +15,21 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 /**
  * Kafka consumer for transaction events.
- * 
- * Listens to transaction events from transaction-service and
- * creates notifications for affected users.
+ *
+ * <p>Consumes transaction events from transaction-service and creates
+ * notifications for affected users. Uses Redis for idempotency tracking
+ * to prevent duplicate notification delivery across restarts and
+ * multiple service instances.</p>
+ *
+ * <p>Redis key format: {@code notification:event:{eventId}}
+ * TTL: Configurable via {@code notification.idempotency.ttl-hours} (default: 24h)</p>
+ *
+ * <p>Defense-in-depth: Redis provides O(1) fast first-pass check before
+ * the DB-based idempotency in {@link NotificationService} (findByIdempotencyKey).</p>
  */
 @Slf4j
 @Component
@@ -26,17 +37,25 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TransactionEventConsumer {
 
     private final NotificationService notificationService;
+    private final RedisTemplate<String, String> redisTemplate;
 
-    /**
-     * Track processed event IDs for idempotency.
-     * In production, this should use Redis or database.
-     */
-    private final ConcurrentHashMap<String, Boolean> processedEvents = new ConcurrentHashMap<>();
+    private static final String IDEMPOTENCY_KEY_PREFIX = "notification:event:";
+
+    @Value("${notification.idempotency.ttl-hours:24}")
+    private int idempotencyTtlHours;
 
     /**
      * Consumes transaction events and creates notifications.
-     * 
+     *
+     * <p>Idempotency flow:
+     * <ol>
+     *   <li>Check Redis for existing key ({@code notification:event:{eventId}})</li>
+     *   <li>If key exists → duplicate detected, skip and acknowledge</li>
+     *   <li>If key missing → process event, then set Redis key with TTL</li>
+     * </ol></p>
+     *
      * @param event the transaction event
+     * @param key the Kafka message key
      * @param acknowledgment manual acknowledgment for at-least-once delivery
      */
     @KafkaListener(
@@ -48,14 +67,17 @@ public class TransactionEventConsumer {
             @Payload TransactionEvent event,
             @Header(KafkaHeaders.RECEIVED_KEY) String key,
             Acknowledgment acknowledgment) {
-        
-        log.info("Received transaction event: {}, type: {}", 
+
+        log.info("Received transaction event: {}, type: {}",
                 event.getEventId(), event.getEventType());
 
         try {
-            // Check for duplicate processing
+            // Check for duplicate processing via Redis
             String eventId = event.getEventId().toString();
-            if (processedEvents.containsKey(eventId)) {
+            String redisKey = redisKey(eventId);
+            Boolean alreadyProcessed = redisTemplate.hasKey(redisKey);
+
+            if (Boolean.TRUE.equals(alreadyProcessed)) {
                 log.warn("Duplicate event detected, skipping: {}", eventId);
                 acknowledgment.acknowledge();
                 return;
@@ -64,18 +86,29 @@ public class TransactionEventConsumer {
             // Process the event based on type
             processEvent(event);
 
-            // Mark as processed
-            processedEvents.put(eventId, Boolean.TRUE);
+            // Mark as processed in Redis with TTL (auto-expiry prevents memory leak)
+            ValueOperations<String, String> valueOps = redisTemplate.opsForValue();
+            valueOps.set(redisKey, "1", Duration.ofHours(idempotencyTtlHours));
 
             log.info("Successfully processed transaction event: {}", eventId);
 
         } catch (Exception e) {
-            log.error("Error processing transaction event {}: {}", 
+            log.error("Error processing transaction event {}: {}",
                     event.getEventId(), e.getMessage(), e);
             // In production, send to dead-letter queue
         } finally {
             acknowledgment.acknowledge();
         }
+    }
+
+    /**
+     * Builds the Redis key for a given event ID.
+     *
+     * @param eventId the event ID string
+     * @return Redis key in format: notification:event:{eventId}
+     */
+    String redisKey(String eventId) {
+        return IDEMPOTENCY_KEY_PREFIX + eventId;
     }
 
     /**
@@ -105,10 +138,10 @@ public class TransactionEventConsumer {
      */
     private void createCompletionNotification(TransactionEvent event) {
         log.info("Creating completion notification for transaction: {}", event.getSagaId());
-        
+
         NotificationResponse response = notificationService.createFromTransactionEvent(event);
         log.info("Created notification: {} for completed transaction", response.getId());
-        
+
         // Immediately attempt to send
         notificationService.sendNotification(response.getId());
     }
@@ -118,10 +151,10 @@ public class TransactionEventConsumer {
      */
     private void createFailureNotification(TransactionEvent event) {
         log.info("Creating failure notification for transaction: {}", event.getSagaId());
-        
+
         NotificationResponse response = notificationService.createFromTransactionEvent(event);
         log.info("Created notification: {} for failed transaction", response.getId());
-        
+
         notificationService.sendNotification(response.getId());
     }
 
@@ -130,10 +163,10 @@ public class TransactionEventConsumer {
      */
     private void createCompensationNotification(TransactionEvent event) {
         log.info("Creating compensation notification for transaction: {}", event.getSagaId());
-        
+
         NotificationResponse response = notificationService.createFromTransactionEvent(event);
         log.info("Created notification: {} for compensated transaction", response.getId());
-        
+
         notificationService.sendNotification(response.getId());
     }
 
@@ -142,17 +175,20 @@ public class TransactionEventConsumer {
      */
     private void createInitiatedNotification(TransactionEvent event) {
         log.info("Creating initiated notification for transaction: {}", event.getSagaId());
-        
+
         NotificationResponse response = notificationService.createFromTransactionEvent(event);
         log.info("Created notification: {} for initiated transaction", response.getId());
-        
+
         notificationService.sendNotification(response.getId());
     }
 
     /**
-     * Clears processed events cache (for testing).
+     * Clears all idempotency keys from Redis (for testing only).
+     *
+     * <p>Deletes all keys matching the pattern {@code notification:event:*}.</p>
      */
     public void clearProcessedEvents() {
-        processedEvents.clear();
+        redisTemplate.delete(redisTemplate.keys(IDEMPOTENCY_KEY_PREFIX + "*"));
+        log.info("Cleared all idempotency keys from Redis");
     }
 }

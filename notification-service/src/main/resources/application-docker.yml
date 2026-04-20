@@ -47,6 +47,8 @@ notification:
   push:
     enabled: false
     mock: true
+  idempotency:
+    ttl-hours: 24
 
 management:
   endpoints:
