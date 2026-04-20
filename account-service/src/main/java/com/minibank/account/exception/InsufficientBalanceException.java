@@ -7,18 +7,20 @@ import java.util.UUID;
 
 /**
  * Exception thrown when there's insufficient balance for a withdrawal.
- * 
+ *
  * CRITICAL: This exception indicates a failed atomic balance update.
  */
 public class InsufficientBalanceException extends AccountServiceException {
 
+    /** Constructor with account ID and balance details. */
     public InsufficientBalanceException(UUID accountId, BigDecimal requested, BigDecimal available) {
-        super(String.format("Insufficient balance. Account: %s, Requested: %s, Available: %s", 
-              accountId, requested, available), 
-              HttpStatus.BAD_REQUEST, 
+        super(String.format("Insufficient balance. Account: %s, Requested: %s, Available: %s",
+              accountId, requested, available),
+              HttpStatus.BAD_REQUEST,
               "INSUFFICIENT_BALANCE");
     }
 
+    /** Constructor with message. */
     public InsufficientBalanceException(String message) {
         super(message, HttpStatus.BAD_REQUEST, "INSUFFICIENT_BALANCE");
     }

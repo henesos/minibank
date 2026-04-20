@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for user registration request.
- * 
+ *
  * Contains all required information for creating a new user account.
  * Validation annotations ensure data integrity before processing.
  */

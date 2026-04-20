@@ -1,6 +1,5 @@
 package com.minibank.user.dto;
 
-import com.minibank.user.entity.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,9 +8,11 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.minibank.user.entity.User;
+
 /**
  * DTO for user response.
- * 
+ *
  * Excludes sensitive information like password hash.
  * Used for API responses containing user data.
  */
@@ -35,7 +36,7 @@ public class UserResponse {
 
     /**
      * Maps User entity to UserResponse DTO.
-     * 
+     *
      * @param user the user entity
      * @return the response DTO
      */

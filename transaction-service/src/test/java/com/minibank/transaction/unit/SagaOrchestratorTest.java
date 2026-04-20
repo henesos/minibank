@@ -122,6 +122,89 @@ class SagaOrchestratorTest {
         }
     }
 
+    @Nested
+    @DisplayName("Handle Credit Success")
+    class HandleCreditSuccessTests {
+
+        @Test
+        @DisplayName("Should complete saga on credit success - happy path")
+        void handleCreditSuccess_CompletesSaga() throws Exception {
+            // Arrange
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .transactionId(transactionId)
+                    .eventType(SagaEvent.EventType.CREDIT_SUCCESS)
+                    .build();
+
+            testTransaction.setStatus(Transaction.TransactionStatus.PROCESSING);
+            testTransaction.setSagaStep(Transaction.SagaStep.CREDIT_PENDING);
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+            when(outboxRepository.save(any(OutboxEvent.class))).thenAnswer(invocation -> {
+                OutboxEvent savedEvent = invocation.getArgument(0);
+                return savedEvent;
+            });
+
+            // Act
+            sagaOrchestrator.handleCreditSuccess(event);
+
+            // Assert — transaction should be COMPLETED
+            verify(transactionRepository).save(argThat(tx ->
+                tx.getStatus() == Transaction.TransactionStatus.COMPLETED &&
+                tx.getSagaStep() == Transaction.SagaStep.COMPLETED &&
+                tx.getCompletedAt() != null
+            ));
+
+            // Assert — outbox event should be SAGA_COMPLETED
+            verify(outboxRepository).save(argThat(outboxEvent ->
+                outboxEvent.getEventType() == OutboxEvent.EventType.SAGA_COMPLETED &&
+                outboxEvent.getSagaId().equals(sagaId) &&
+                outboxEvent.getTransactionId().equals(transactionId) &&
+                outboxEvent.getAggregateType().equals("Transaction")
+            ));
+        }
+
+        @Test
+        @DisplayName("Should throw when transaction not found on credit success")
+        void handleCreditSuccess_TransactionNotFound() {
+            // Arrange
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.CREDIT_SUCCESS)
+                    .build();
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThrows(IllegalStateException.class,
+                    () -> sagaOrchestrator.handleCreditSuccess(event));
+
+            verify(outboxRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Should throw on serialization failure and not save transaction")
+        void handleCreditSuccess_SerializationFails() throws Exception {
+            // Arrange
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.CREDIT_SUCCESS)
+                    .build();
+
+            testTransaction.setStatus(Transaction.TransactionStatus.PROCESSING);
+            testTransaction.setSagaStep(Transaction.SagaStep.CREDIT_PENDING);
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(objectMapper.writeValueAsString(any()))
+                    .thenThrow(new com.fasterxml.jackson.core.JsonProcessingException("Serialization failed") {});
+
+            // Act & Assert
+            assertThrows(com.minibank.transaction.exception.TransactionServiceException.class,
+                    () -> sagaOrchestrator.handleCreditSuccess(event));
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // Handle Failure Tests
     // ═══════════════════════════════════════════════════════════════════════

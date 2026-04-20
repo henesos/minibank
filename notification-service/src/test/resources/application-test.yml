@@ -42,6 +42,8 @@ notification:
   retry:
     max-attempts: 2
     delay-ms: 1000
+  idempotency:
+    ttl-hours: 1
 
 # Logging
 logging:
