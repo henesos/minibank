@@ -5,9 +5,10 @@ package com.minibank.transaction.exception;
  */
 public class DuplicateTransactionException extends TransactionServiceException {
 
+    /** Constructor. */
     public DuplicateTransactionException(String idempotencyKey) {
-        super("Duplicate transaction detected for idempotency key: " + idempotencyKey, 
-              org.springframework.http.HttpStatus.CONFLICT, 
+        super("Duplicate transaction detected for idempotency key: " + idempotencyKey,
+              org.springframework.http.HttpStatus.CONFLICT,
               "DUPLICATE_TRANSACTION");
     }
 }

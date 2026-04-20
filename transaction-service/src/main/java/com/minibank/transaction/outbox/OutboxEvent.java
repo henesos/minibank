@@ -1,7 +1,20 @@
 package com.minibank.transaction.outbox;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
@@ -13,18 +26,18 @@ import java.util.UUID;
 
 /**
  * Outbox Entity for MiniBank
- * 
+ *
  * Implements the Outbox Pattern for reliable event publishing.
- * 
+ *
  * OUTBOX PATTERN FLOW:
  * 1. Transaction is created in DB
  * 2. Outbox event is created in the SAME transaction
  * 3. Background process reads outbox events
  * 4. Events are published to Kafka
  * 5. Outbox event is marked as SENT
- * 
+ *
  * This ensures that events are never lost, even if Kafka is temporarily unavailable.
- * 
+ *
  * CRITICAL: Outbox and Transaction must be in the same database transaction!
  */
 @Entity

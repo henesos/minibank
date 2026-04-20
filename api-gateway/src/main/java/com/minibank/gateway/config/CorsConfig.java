@@ -7,21 +7,23 @@ import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * CORS Configuration for API Gateway
- * 
+ *
  * Allows frontend applications to communicate with the gateway
  * from different origins.
  */
 @Configuration
 public class CorsConfig {
 
+    private static final long CORS_MAX_AGE = 3600L;
+
+    /** CORS web filter bean configuration. */
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        
+
         // Allowed origins (configure for production)
         // Using allowedOriginPatterns for wildcard support in Docker environment
         corsConfig.setAllowedOriginPatterns(Arrays.asList(
@@ -34,12 +36,12 @@ public class CorsConfig {
                 "http://localhost:80",
                 "http://127.0.0.1:80"
         ));
-        
+
         // Allowed methods
         corsConfig.setAllowedMethods(Arrays.asList(
                 "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
         ));
-        
+
         // Allowed headers
         corsConfig.setAllowedHeaders(Arrays.asList(
                 "Authorization",
@@ -52,7 +54,7 @@ public class CorsConfig {
                 "X-Idempotency-Key",
                 "X-Request-ID"
         ));
-        
+
         // Exposed headers
         corsConfig.setExposedHeaders(Arrays.asList(
                 "Authorization",
@@ -61,12 +63,12 @@ public class CorsConfig {
                 "X-RateLimit-Remaining",
                 "X-RateLimit-Reset"
         ));
-        
+
         // Allow credentials (cookies, authorization headers)
         corsConfig.setAllowCredentials(true);
-        
+
         // Preflight cache duration (seconds)
-        corsConfig.setMaxAge(3600L);
+        corsConfig.setMaxAge(CORS_MAX_AGE);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfig);

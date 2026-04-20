@@ -1,5 +1,17 @@
 package com.minibank.notification.service;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import com.minibank.notification.dto.NotificationRequest;
 import com.minibank.notification.dto.NotificationResponse;
 import com.minibank.notification.dto.TransactionEvent;
@@ -10,22 +22,10 @@ import com.minibank.notification.exception.DuplicateNotificationException;
 import com.minibank.notification.exception.NotificationNotFoundException;
 import com.minibank.notification.exception.NotificationServiceException;
 import com.minibank.notification.repository.NotificationRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing notifications.
- * 
+ *
  * Handles creation, sending, and tracking of notifications
  * across multiple channels (email, SMS, push, in-app).
  */
@@ -41,9 +41,11 @@ public class NotificationService {
     @Value("${notification.retry.max-attempts:3}")
     private int defaultMaxRetries;
 
+    private static final int DEFAULT_BATCH_SIZE = 100;
+
     /**
      * Creates and queues a new notification.
-     * 
+     *
      * @param request notification request
      * @return created notification response
      * @throws DuplicateNotificationException if idempotency key already exists
@@ -57,7 +59,7 @@ public class NotificationService {
             notificationRepository.findByIdempotencyKey(request.getIdempotencyKey())
                     .ifPresent(existing -> {
                         throw new DuplicateNotificationException(
-                                request.getIdempotencyKey(), 
+                                request.getIdempotencyKey(),
                                 existing.getId()
                         );
                     });
@@ -85,7 +87,7 @@ public class NotificationService {
 
     /**
      * Sends a pending notification.
-     * 
+     *
      * @param notificationId notification to send
      * @return updated notification response
      */
@@ -112,7 +114,7 @@ public class NotificationService {
 
         try {
             boolean sent = sendByChannel(notification);
-            
+
             if (sent) {
                 notification.markAsSent();
                 log.info("Successfully sent notification: {}", notificationId);
@@ -140,7 +142,7 @@ public class NotificationService {
             case PUSH:
             case IN_APP:
                 // For MVP, in-app and push are simulated
-                log.info("Simulating {} notification for user: {}", 
+                log.info("Simulating {} notification for user: {}",
                         notification.getType(), notification.getUserId());
                 return true;
             default:
@@ -154,17 +156,17 @@ public class NotificationService {
      */
     private void handleSendFailure(Notification notification, String errorMessage) {
         notification.incrementRetry();
-        
+
         if (notification.getRetryCount() >= notification.getMaxRetries()) {
             notification.markAsFailed(errorMessage);
-            log.error("Notification {} failed after {} attempts: {}", 
+            log.error("Notification {} failed after {} attempts: {}",
                     notification.getId(), notification.getRetryCount(), errorMessage);
         } else {
             notification.markAsFailed(errorMessage);
-            log.warn("Notification {} failed, attempt {}/{}: {}", 
-                    notification.getId(), 
-                    notification.getRetryCount(), 
-                    notification.getMaxRetries(), 
+            log.warn("Notification {} failed, attempt {}/{}: {}",
+                    notification.getId(),
+                    notification.getRetryCount(),
+                    notification.getMaxRetries(),
                     errorMessage);
         }
     }
@@ -177,11 +179,11 @@ public class NotificationService {
         log.debug("Creating notification from transaction event: {}", event.getEventType());
 
         String idempotencyKey = "tx-" + event.getEventId();
-        
+
         // Determine notification content based on event type
         String subject = generateSubject(event);
         String content = generateContent(event);
-        
+
         // Notify the sender (fromUserId)
         NotificationRequest senderRequest = NotificationRequest.builder()
                 .userId(event.getFromUserId())
@@ -219,22 +221,22 @@ public class NotificationService {
      */
     private String generateContent(TransactionEvent event) {
         StringBuilder sb = new StringBuilder();
-        
+
         switch (event.getEventType()) {
             case TRANSACTION_INITIATED:
                 sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başlatılmıştır.\n", 
+                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başlatılmıştır.\n",
                         event.getAmount(), event.getCurrency()));
                 sb.append("İşlem tamamlandığında bilgilendirileceksiniz.\n\n");
                 break;
             case TRANSACTION_COMPLETED:
                 sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başarıyla tamamlanmıştır.\n", 
+                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başarıyla tamamlanmıştır.\n",
                         event.getAmount(), event.getCurrency()));
                 break;
             case TRANSACTION_FAILED:
                 sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz gerçekleştirilemedi.\n", 
+                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz gerçekleştirilemedi.\n",
                         event.getAmount(), event.getCurrency()));
                 if (event.getFailureReason() != null) {
                     sb.append("Hata nedeni: ").append(event.getFailureReason()).append("\n");
@@ -242,14 +244,14 @@ public class NotificationService {
                 break;
             case COMPENSATION_COMPLETED:
                 sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz iptal edilmiş olup,\n", 
+                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz iptal edilmiş olup,\n",
                         event.getAmount(), event.getCurrency()));
                 sb.append("tutar hesabınıza iade edilmiştir.\n");
                 break;
             default:
                 sb.append("İşlem durumunuz güncellenmiştir.\n");
         }
-        
+
         sb.append("\nSaygılarımızla,\nMiniBank");
         return sb.toString();
     }
@@ -289,19 +291,19 @@ public class NotificationService {
      */
     @Transactional
     public int processPendingNotifications() {
-        List<Notification> pending = notificationRepository.findPendingNotifications(100);
+        List<Notification> pending = notificationRepository.findPendingNotifications(DEFAULT_BATCH_SIZE);
         int processed = 0;
-        
+
         for (Notification notification : pending) {
             try {
                 sendNotification(notification.getId());
                 processed++;
             } catch (Exception e) {
-                log.error("Failed to process notification {}: {}", 
+                log.error("Failed to process notification {}: {}",
                         notification.getId(), e.getMessage());
             }
         }
-        
+
         log.info("Processed {} pending notifications", processed);
         return processed;
     }
@@ -331,7 +333,7 @@ public class NotificationService {
 
     /**
      * Marks a notification as read.
-     * 
+     *
      * @param notificationId notification to mark as read
      * @return updated notification response
      */
@@ -344,30 +346,30 @@ public class NotificationService {
 
         notification.markAsRead();
         notification = notificationRepository.save(notification);
-        
+
         log.info("Notification {} marked as read", notificationId);
         return toResponse(notification);
     }
 
     /**
      * Marks all notifications as read for a user.
-     * 
+     *
      * @param userId user whose notifications to mark as read
      * @return number of notifications marked as read
      */
     @Transactional
     public int markAllAsRead(UUID userId) {
         log.debug("Marking all notifications as read for user: {}", userId);
-        
+
         int count = notificationRepository.markAllAsRead(userId);
         log.info("Marked {} notifications as read for user: {}", count, userId);
-        
+
         return count;
     }
 
     /**
      * Gets unread notification count for a user.
-     * 
+     *
      * @param userId user to get count for
      * @return number of unread notifications
      */
@@ -378,7 +380,7 @@ public class NotificationService {
 
     /**
      * Gets all unread notifications for a user.
-     * 
+     *
      * @param userId user to get notifications for
      * @return list of unread notifications
      */
@@ -392,7 +394,7 @@ public class NotificationService {
 
     /**
      * Soft deletes a notification.
-     * 
+     *
      * @param notificationId notification to delete
      */
     @Transactional
@@ -404,7 +406,7 @@ public class NotificationService {
 
         notification.softDelete();
         notificationRepository.save(notification);
-        
+
         log.info("Notification {} soft deleted", notificationId);
     }
 }
