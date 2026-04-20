@@ -12,7 +12,7 @@ import java.util.UUID;
 
 /**
  * Saga Event - Base class for all saga events.
- * 
+ *
  * Events are exchanged between Saga Orchestrator and participants via Kafka.
  */
 @Data
@@ -123,10 +123,10 @@ public class SagaEvent implements Serializable {
     public static class Topics {
         // Orchestrator publishes to these
         public static final String SAGA_COMMANDS = "saga-commands";
-        
+
         // Participants publish to this
         public static final String SAGA_EVENTS = "saga-events";
-        
+
         // Specific service topics
         public static final String ACCOUNT_COMMANDS = "account-commands";
         public static final String ACCOUNT_EVENTS = "account-events";

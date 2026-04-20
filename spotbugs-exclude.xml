@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter
+        xmlns="https://github.com/spotbugs/filter/3.0.0"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/4.8.6/spotbugs/etc/findbugsfilter.xsd">
+
+    <!-- Exclude all test classes -->
+    <Match>
+        <Class name="~.*\.test\..*"/>
+    </Match>
+    <Match>
+        <Class name="~.*Test"/>
+    </Match>
+    <Match>
+        <Class name="~.*Tests"/>
+    </Match>
+
+    <!-- Exclude Lombok generated code -->
+    <Match>
+        <Class name="~.*\$_.*"/>
+    </Match>
+    <Match>
+        <Source name="~.*\.lombok\..*"/>
+    </Match>
+
+    <!-- Exclude Spring Boot auto-configuration classes -->
+    <Match>
+        <Class name="~org\.springframework\.boot\.autoconfigure\..*"/>
+    </Match>
+    <Match>
+        <Class name="~org\.springframework\.boot\.actuate\.autoconfigure\..*"/>
+    </Match>
+
+    <!-- Exclude generated MapStruct implementations -->
+    <Match>
+        <Class name="~.*MapperImpl"/>
+    </Match>
+    <Match>
+        <Class name="~.*MapperImpl_.*"/>
+    </Match>
+
+    <!-- Exclude Spring configuration classes (typically safe patterns) -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude DI-related false positives common in Spring -->
+    <Match>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+        <Class name="~.*Config"/>
+    </Match>
+    <Match>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+        <Class name="~.*Application"/>
+    </Match>
+
+    <!-- Exclude Serializable false positives in DTOs -->
+    <Match>
+        <Bug pattern="SE_NO_SERIALVERSIONID"/>
+        <Class name="~.*\.dto\..*"/>
+    </Match>
+    <Match>
+        <Bug pattern="SE_NO_SERIALVERSIONID"/>
+        <Class name="~.*\.entity\..*"/>
+    </Match>
+
+    <!-- Exclude Spring Data JPA repository false positives -->
+    <Match>
+        <Class name="~.*Repository"/>
+    </Match>
+
+</FindBugsFilter>

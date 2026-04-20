@@ -1,6 +1,6 @@
 package com.minibank.account.repository;
 
-import com.minibank.account.entity.Account;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -8,21 +8,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.minibank.account.entity.Account;
+
 /**
  * Account Repository for database operations.
- * 
+ *
  * CRITICAL: Balance operations use atomic SQL updates!
- * 
+ *
  * Pattern: Optimistic Locking with @Version + Atomic Updates
  * - Regular operations: Use @Version for conflict detection
  * - Balance updates: Use atomic SQL (single UPDATE with WHERE condition)
- * 
+ *
  * NEVER do: Read balance → Modify in memory → Save
  * ALWAYS do: Single atomic UPDATE with condition
  */
@@ -31,7 +32,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Finds all accounts for a user.
-     * 
+     *
      * @param userId the user ID
      * @return list of accounts
      */
@@ -39,7 +40,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Finds an account by account number.
-     * 
+     *
      * @param accountNumber the account number
      * @return Optional containing the account if found
      */
@@ -47,7 +48,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Finds active accounts for a user.
-     * 
+     *
      * @param userId the user ID
      * @return list of active accounts
      */
@@ -57,7 +58,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /**
      * Finds an account by ID with PESSIMISTIC WRITE lock.
      * Use this for operations that will modify the account.
-     * 
+     *
      * @param id the account ID
      * @return Optional containing the locked account
      */
@@ -67,14 +68,14 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * ATOMIC BALANCE DEDUCTION
-     * 
+     *
      * This is the CRITICAL method for withdrawing money.
      * It atomically checks balance AND deducts in a single SQL statement.
-     * 
-     * Returns: 
+     *
+     * Returns:
      * - 1 if successful (balance was sufficient)
      * - 0 if failed (insufficient balance or account not found)
-     * 
+     *
      * @param id account ID
      * @param amount amount to deduct
      * @return number of rows affected (1 = success, 0 = failure)
@@ -88,9 +89,9 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * ATOMIC BALANCE ADDITION
-     * 
+     *
      * Adds money to the account atomically.
-     * 
+     *
      * @param id account ID
      * @param amount amount to add
      * @return number of rows affected
@@ -104,7 +105,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /**
      * Gets the current balance for an account.
      * ALWAYS read balance from DB - NEVER from cache!
-     * 
+     *
      * @param id account ID
      * @return current balance or null if not found
      */
@@ -114,7 +115,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /**
      * Gets the available balance for an account.
      * Available balance = Balance - Reserved amount (for pending transactions)
-     * 
+     *
      * @param id account ID
      * @return available balance or null if not found
      */
@@ -123,7 +124,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Checks if an account exists for a user.
-     * 
+     *
      * @param id account ID
      * @param userId user ID
      * @return true if account belongs to user
@@ -134,7 +135,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Counts accounts by status.
-     * 
+     *
      * @param status the status
      * @return number of accounts with the status
      */
@@ -142,7 +143,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /**
      * Finds dormant accounts (no transactions for specified days).
-     * 
+     *
      * @param threshold the date threshold
      * @return list of dormant accounts
      */
@@ -152,7 +153,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /**
      * Locks funds (reduces available balance without reducing actual balance).
      * Used for pending transactions that need to reserve funds.
-     * 
+     *
      * @param id account ID
      * @param amount amount to lock
      * @return rows affected
@@ -165,7 +166,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /**
      * Unlocks funds (increases available balance).
      * Used when a pending transaction is cancelled.
-     * 
+     *
      * @param id account ID
      * @param amount amount to unlock
      * @return rows affected

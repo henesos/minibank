@@ -1,7 +1,20 @@
 package com.minibank.account.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.data.annotation.CreatedBy;
@@ -16,15 +29,15 @@ import java.util.UUID;
 
 /**
  * Account Entity for MiniBank
- * 
+ *
  * Represents a bank account with balance and status.
- * 
+ *
  * CRITICAL DESIGN DECISIONS:
  * 1. Balance is NEVER cached - always read from DB
  * 2. Balance updates use atomic SQL (UPDATE ... WHERE balance >= amount)
  * 3. Uses DECIMAL(19,4) for precision - no floating point errors
  * 4. Soft delete pattern for audit trail
- * 
+ *
  * Currency Support:
  * - TRY (Turkish Lira) - default
  * - USD, EUR supported for international accounts
@@ -163,7 +176,7 @@ public class Account {
 
     /**
      * Checks if there's sufficient balance for a withdrawal.
-     * 
+     *
      * @param amount the amount to check
      * @return true if sufficient balance exists
      */

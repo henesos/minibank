@@ -61,6 +61,8 @@ notification:
   retry:
     max-attempts: 3
     delay-ms: 5000
+  idempotency:
+    ttl-hours: 24
 
 # Kafka Topics
 kafka:

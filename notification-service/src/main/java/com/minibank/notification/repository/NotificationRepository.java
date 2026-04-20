@@ -1,8 +1,5 @@
 package com.minibank.notification.repository;
 
-import com.minibank.notification.entity.Notification;
-import com.minibank.notification.entity.Notification.NotificationStatus;
-import com.minibank.notification.entity.Notification.NotificationType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,9 +13,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.minibank.notification.entity.Notification;
+import com.minibank.notification.entity.Notification.NotificationStatus;
+import com.minibank.notification.entity.Notification.NotificationType;
+
 /**
  * Repository interface for Notification entity.
- * 
+ *
  * Provides CRUD operations and custom queries for notification management.
  */
 @Repository
@@ -43,7 +44,7 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     /**
      * Finds pending notifications with limit.
      */
-    @Query(value = "SELECT * FROM notifications WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT :limit", 
+    @Query(value = "SELECT * FROM notifications WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT :limit",
            nativeQuery = true)
     List<Notification> findPendingNotifications(@Param("limit") int limit);
 
@@ -96,7 +97,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     /**
      * Finds notifications for a user within a date range.
      */
-    @Query("SELECT n FROM Notification n WHERE n.userId = :userId AND n.createdAt BETWEEN :startDate AND :endDate ORDER BY n.createdAt DESC")
+    @Query("SELECT n FROM Notification n WHERE n.userId = :userId "
+            + "AND n.createdAt BETWEEN :startDate AND :endDate ORDER BY n.createdAt DESC")
     List<Notification> findByUserIdAndDateRange(
             @Param("userId") UUID userId,
             @Param("startDate") LocalDateTime startDate,

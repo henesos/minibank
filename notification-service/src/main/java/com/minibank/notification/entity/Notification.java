@@ -1,7 +1,20 @@
 package com.minibank.notification.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.data.annotation.CreatedDate;
@@ -13,10 +26,10 @@ import java.util.UUID;
 
 /**
  * Notification Entity for MiniBank
- * 
+ *
  * Stores all notification records for audit and tracking purposes.
  * Supports multiple notification channels: EMAIL, SMS, PUSH, IN_APP.
- * 
+ *
  * NOTIFICATION LIFECYCLE:
  * 1. PENDING - Notification created, waiting to be sent
  * 2. SENT - Successfully sent to provider
@@ -40,6 +53,8 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @SQLRestriction("deleted = false")
 public class Notification {
+
+    private static final int DEFAULT_MAX_RETRIES = 3;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -116,7 +131,7 @@ public class Notification {
      */
     @Column(name = "max_retries")
     @Builder.Default
-    private Integer maxRetries = 3;
+    private Integer maxRetries = DEFAULT_MAX_RETRIES;
 
     /**
      * Error message if failed
@@ -224,8 +239,8 @@ public class Notification {
      * Checks if notification can be retried.
      */
     public boolean canRetry() {
-        return this.retryCount < this.maxRetries && 
-               (this.status == NotificationStatus.PENDING || 
+        return this.retryCount < this.maxRetries &&
+               (this.status == NotificationStatus.PENDING ||
                 this.status == NotificationStatus.FAILED);
     }
 

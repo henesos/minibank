@@ -1,14 +1,5 @@
 package com.minibank.transaction.service;
 
-import com.minibank.transaction.dto.TransferRequest;
-import com.minibank.transaction.dto.TransactionResponse;
-import com.minibank.transaction.entity.Transaction;
-import com.minibank.transaction.exception.DailyLimitExceededException;
-import com.minibank.transaction.exception.DuplicateTransactionException;
-import com.minibank.transaction.exception.TransactionNotFoundException;
-import com.minibank.transaction.exception.TransactionServiceException;
-import com.minibank.transaction.repository.TransactionRepository;
-import com.minibank.transaction.saga.SagaOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,15 +13,24 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.minibank.transaction.dto.TransactionResponse;
+import com.minibank.transaction.dto.TransferRequest;
+import com.minibank.transaction.entity.Transaction;
+import com.minibank.transaction.exception.DailyLimitExceededException;
+import com.minibank.transaction.exception.TransactionNotFoundException;
+import com.minibank.transaction.exception.TransactionServiceException;
+import com.minibank.transaction.repository.TransactionRepository;
+import com.minibank.transaction.saga.SagaOrchestrator;
+
 /**
  * Transaction Service - Business logic for money transfers.
- * 
+ *
  * Implements the Saga pattern with distributed idempotency.
  */
 @Slf4j
@@ -50,22 +50,23 @@ public class TransactionService {
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "tx:idempotency:";
     private static final String IDEMPOTENCY_VALUE_PROCESSING = "PROCESSING";
+    private static final String DEFAULT_CURRENCY = "TRY";
 
     /**
      * Initiates a new money transfer.
-     * 
+     *
      * IDEMPOTENCY FLOW:
      * 1. Check Redis for existing idempotency key
      * 2. If exists and processing, return existing transaction
      * 3. If exists and completed, return completed transaction
      * 4. If not exists, set key to PROCESSING and create transaction
-     * 
+     *
      * @param request transfer request
      * @return transaction response
      */
     @Transactional
     public TransactionResponse initiateTransfer(TransferRequest request) {
-        log.info("Initiating transfer: from={}, to={}, amount={}", 
+        log.info("Initiating transfer: from={}, to={}, amount={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount());
 
         String idempotencyKey = request.getIdempotencyKey();
@@ -103,16 +104,16 @@ public class TransactionService {
         // STEP 5: Set idempotency key in Redis (atomic operation)
         boolean setSuccessful = Boolean.TRUE.equals(
             redisTemplate.opsForValue().setIfAbsent(
-                redisKey, 
-                IDEMPOTENCY_VALUE_PROCESSING, 
-                idempotencyTtlSeconds, 
+                redisKey,
+                IDEMPOTENCY_VALUE_PROCESSING,
+                idempotencyTtlSeconds,
                 TimeUnit.SECONDS
             )
         );
 
         if (!setSuccessful) {
             log.warn("Race condition detected for idempotency key: {}", idempotencyKey);
-            return handleExistingIdempotencyKey(idempotencyKey, 
+            return handleExistingIdempotencyKey(idempotencyKey,
                 redisTemplate.opsForValue().get(redisKey));
         }
 
@@ -125,7 +126,7 @@ public class TransactionService {
                 .fromUserId(request.getFromUserId())
                 .toUserId(request.getToUserId())
                 .amount(request.getAmount())
-                .currency(request.getCurrency() != null ? request.getCurrency() : "TRY")
+                .currency(request.getCurrency() != null ? request.getCurrency() : DEFAULT_CURRENCY)
                 .description(request.getDescription())
                 .status(Transaction.TransactionStatus.PENDING)
                 .retryCount(0)
@@ -136,7 +137,7 @@ public class TransactionService {
         // STEP 7: Start the saga
         sagaOrchestrator.startSaga(transaction);
 
-        log.info("Transfer initiated: transactionId={}, sagaId={}", 
+        log.info("Transfer initiated: transactionId={}, sagaId={}",
                 transaction.getId(), transaction.getSagaId());
 
         return TransactionResponse.fromEntity(transaction);
@@ -166,9 +167,9 @@ public class TransactionService {
     private void checkDailyLimit(UUID userId, BigDecimal amount) {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         BigDecimal dailyTotal = transactionRepository.getDailyTransferTotal(userId, startOfDay);
-        
+
         BigDecimal newTotal = dailyTotal.add(amount);
-        
+
         if (newTotal.compareTo(maxDailyTransfer) > 0) {
             throw new DailyLimitExceededException(amount, maxDailyTransfer, dailyTotal);
         }
@@ -176,7 +177,7 @@ public class TransactionService {
 
     /**
      * Gets a transaction by ID.
-     * 
+     *
      * @param id transaction ID
      * @return transaction response
      */
@@ -189,7 +190,7 @@ public class TransactionService {
 
     /**
      * Gets a transaction by saga ID.
-     * 
+     *
      * @param sagaId saga correlation ID
      * @return transaction response
      */
@@ -202,7 +203,7 @@ public class TransactionService {
 
     /**
      * Gets all transactions for a user.
-     * 
+     *
      * @param userId user ID
      * @return list of transactions
      */
@@ -215,7 +216,7 @@ public class TransactionService {
 
     /**
      * Gets all transactions for a user with pagination.
-     * 
+     *
      * @param userId user ID
      * @param page page number (0-indexed)
      * @param size page size
@@ -230,7 +231,7 @@ public class TransactionService {
 
     /**
      * Gets all transactions for an account.
-     * 
+     *
      * @param accountId account ID
      * @return list of transactions
      */
@@ -238,10 +239,13 @@ public class TransactionService {
     public List<TransactionResponse> getTransactionsByAccountId(UUID accountId) {
         List<Transaction> asSource = transactionRepository.findByFromAccountId(accountId);
         List<Transaction> asDestination = transactionRepository.findByToAccountId(accountId);
-        
-        asSource.addAll(asDestination);
-        
-        return asSource.stream()
+
+        // Merge into new list to avoid modifying repository-returned collections
+        List<Transaction> allTransactions = new ArrayList<>(asSource.size() + asDestination.size());
+        allTransactions.addAll(asSource);
+        allTransactions.addAll(asDestination);
+
+        return allTransactions.stream()
                 .distinct()
                 .map(TransactionResponse::fromEntity)
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -253,7 +257,7 @@ public class TransactionService {
      */
     public void markIdempotencyComplete(String idempotencyKey, UUID transactionId) {
         String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
-        redisTemplate.opsForValue().set(redisKey, transactionId.toString(), 
+        redisTemplate.opsForValue().set(redisKey, transactionId.toString(),
                 idempotencyTtlSeconds, TimeUnit.SECONDS);
     }
 }
