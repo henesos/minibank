@@ -1,9 +1,5 @@
 package com.minibank.transaction.saga;
 
-import com.minibank.transaction.entity.Transaction;
-import com.minibank.transaction.outbox.OutboxEvent;
-import com.minibank.transaction.outbox.OutboxRepository;
-import com.minibank.transaction.repository.TransactionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -12,29 +8,34 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.minibank.transaction.entity.Transaction;
+import com.minibank.transaction.exception.TransactionServiceException;
+import com.minibank.transaction.outbox.OutboxEvent;
+import com.minibank.transaction.outbox.OutboxRepository;
+import com.minibank.transaction.repository.TransactionRepository;
+
 /**
  * Saga Orchestrator - Coordinates the distributed transaction.
- * 
+ *
  * SAGA WORKFLOW:
- * 
+ *
  * 1. START
  *    └── Send DEBIT_REQUEST to Account Service
- *    
+ *
  * 2. DEBIT_SUCCESS received
  *    └── Send CREDIT_REQUEST to Account Service
- *    
+ *
  * 3. CREDIT_SUCCESS received
  *    └── Mark transaction as COMPLETED
- *    
+ *
  * FAILURE HANDLING:
- * 
+ *
  * - If DEBIT_FAILURE → Mark transaction as FAILED
  * - If CREDIT_FAILURE → Send COMPENSATE_DEBIT, mark as COMPENSATED
- * 
+ *
  * OUTBOX PATTERN:
  * All events are first written to outbox table, then published by background process.
  * This ensures events are never lost.
@@ -53,7 +54,7 @@ public class SagaOrchestrator {
 
     /**
      * Starts a new saga for money transfer.
-     * 
+     *
      * @param transaction the transaction to process
      */
     @Transactional
@@ -85,7 +86,7 @@ public class SagaOrchestrator {
 
     /**
      * Handles DEBIT_SUCCESS event from Account Service.
-     * 
+     *
      * @param event the success event
      */
     @Transactional
@@ -120,7 +121,7 @@ public class SagaOrchestrator {
 
     /**
      * Handles DEBIT_FAILURE event from Account Service.
-     * 
+     *
      * @param event the failure event
      */
     @Transactional
@@ -151,7 +152,7 @@ public class SagaOrchestrator {
 
     /**
      * Handles CREDIT_SUCCESS event from Account Service.
-     * 
+     *
      * @param event the success event
      */
     @Transactional
@@ -183,7 +184,7 @@ public class SagaOrchestrator {
     /**
      * Handles CREDIT_FAILURE event from Account Service.
      * Triggers compensation.
-     * 
+     *
      * @param event the failure event
      */
     @Transactional
@@ -216,7 +217,7 @@ public class SagaOrchestrator {
 
     /**
      * Handles COMPENSATE_SUCCESS event.
-     * 
+     *
      * @param event the success event
      */
     @Transactional
@@ -237,7 +238,7 @@ public class SagaOrchestrator {
     /**
      * Handles COMPENSATE_FAILURE event.
      * This is a critical situation - requires manual intervention.
-     * 
+     *
      * @param event the failure event
      */
     @Transactional
@@ -248,7 +249,8 @@ public class SagaOrchestrator {
                 .orElseThrow(() -> new IllegalStateException("Transaction not found: " + event.getSagaId()));
 
         // Mark as failed - requires manual intervention
-        transaction.markAsFailed("CRITICAL: Compensation failed - manual intervention required: " + event.getErrorMessage());
+        transaction.markAsFailed("CRITICAL: Compensation failed - manual intervention required: "
+                + event.getErrorMessage());
         transactionRepository.save(transaction);
 
         log.error("CRITICAL: Compensation failed, manual intervention required: sagaId={}", event.getSagaId());
@@ -277,8 +279,12 @@ public class SagaOrchestrator {
             log.debug("Saved outbox event: type={}, sagaId={}", eventType, transaction.getSagaId());
 
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize saga event: {}", e.getMessage());
-            throw new RuntimeException("Failed to serialize saga event", e);
+            log.error("Failed to serialize saga event: {}", e.getMessage(), e);
+            throw new TransactionServiceException(
+                    "Failed to serialize saga event",
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "SAGA_SERIALIZATION_FAILED",
+                    e);
         }
     }
 }

@@ -1,22 +1,25 @@
 package com.minibank.user.service;
 
-import com.minibank.user.entity.User;
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+import javax.crypto.SecretKey;
+
+import com.minibank.user.entity.User;
 
 /**
  * JWT Service for token generation and validation.
- * 
+ *
  * Uses jjwt library with HMAC-SHA256 signing.
  * Access tokens have short expiry (24h), refresh tokens longer (7d).
  */
@@ -41,7 +44,7 @@ public class JwtService {
         claims.put("email", user.getEmail());
         claims.put("status", user.getStatus().name());
         claims.put("type", "access");
-        
+
         return generateToken(claims, user.getId().toString(), accessTokenExpiration);
     }
 
@@ -51,7 +54,7 @@ public class JwtService {
     public String generateRefreshToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("type", "refresh");
-        
+
         return generateToken(claims, user.getId().toString(), refreshTokenExpiration);
     }
 

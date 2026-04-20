@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * MiniBank API Gateway Application
- * 
+ *
  * Features:
  * - Spring Cloud Gateway for routing
  * - JWT Authentication for all services
@@ -22,6 +22,7 @@ import java.util.UUID;
 @SpringBootApplication
 public class ApiGatewayApplication {
 
+    /** Main entry point. @param args command-line arguments */
     public static void main(String[] args) {
         SpringApplication.run(ApiGatewayApplication.class, args);
     }

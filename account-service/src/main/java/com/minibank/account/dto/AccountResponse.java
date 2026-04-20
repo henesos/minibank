@@ -1,6 +1,5 @@
 package com.minibank.account.dto;
 
-import com.minibank.account.entity.Account;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,9 +9,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.minibank.account.entity.Account;
+
 /**
  * DTO for account response.
- * 
+ *
  * Note: Balance is included but should always be read from DB,
  * not from any cached response.
  */
@@ -37,7 +38,7 @@ public class AccountResponse {
 
     /**
      * Maps Account entity to AccountResponse DTO.
-     * 
+     *
      * @param account the account entity
      * @return the response DTO
      */

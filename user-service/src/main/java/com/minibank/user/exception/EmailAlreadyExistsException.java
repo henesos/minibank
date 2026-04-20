@@ -7,9 +7,10 @@ import org.springframework.http.HttpStatus;
  */
 public class EmailAlreadyExistsException extends UserServiceException {
 
+    /** Constructor. */
     public EmailAlreadyExistsException(String email) {
-        super("Email already registered: " + email, 
-              HttpStatus.CONFLICT, 
+        super("Email already registered: " + email,
+              HttpStatus.CONFLICT,
               "USER_EMAIL_EXISTS");
     }
 }

@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for authentication response.
- * 
+ *
  * Contains JWT tokens and basic user information.
  */
 @Data
@@ -22,6 +22,7 @@ public class AuthResponse {
     private Long expiresIn;
     private UserResponse user;
 
+    /** Factory method to create AuthResponse. */
     public static AuthResponse of(String accessToken, String refreshToken, Long expiresIn, UserResponse user) {
         return AuthResponse.builder()
                 .accessToken(accessToken)
