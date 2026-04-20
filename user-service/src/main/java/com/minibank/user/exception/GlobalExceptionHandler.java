@@ -17,7 +17,7 @@ import java.util.Map;
 
 /**
  * Global Exception Handler for User Service.
- * 
+ *
  * Catches all exceptions and converts them to consistent API error responses.
  */
 @Slf4j
@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserServiceException.class)
     public ResponseEntity<ErrorResponse> handleUserServiceException(UserServiceException ex) {
         log.warn("UserServiceException: {} - {}", ex.getErrorCode(), ex.getMessage());
-        
+
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(ErrorResponse.builder()

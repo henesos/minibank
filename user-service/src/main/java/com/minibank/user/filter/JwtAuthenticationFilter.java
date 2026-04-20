@@ -1,6 +1,5 @@
 package com.minibank.user.filter;
 
-import com.minibank.user.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
+
+import com.minibank.user.service.JwtService;
 
 /**
  * JWT Authentication Filter for User Service (Servlet-based).

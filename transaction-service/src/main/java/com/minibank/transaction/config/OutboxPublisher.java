@@ -1,9 +1,6 @@
 package com.minibank.transaction.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.minibank.transaction.outbox.OutboxEvent;
-import com.minibank.transaction.outbox.OutboxRepository;
-import com.minibank.transaction.saga.SagaEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,14 +13,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.minibank.transaction.outbox.OutboxEvent;
+import com.minibank.transaction.outbox.OutboxRepository;
+import com.minibank.transaction.saga.SagaEvent;
+
 /**
  * Outbox Publisher - Background process that publishes events to Kafka.
- * 
+ *
  * Implements the Outbox Pattern:
  * 1. Reads pending events from outbox table
  * 2. Publishes to Kafka
  * 3. Marks events as SENT
- * 
+ *
  * This ensures reliable event delivery even if Kafka is temporarily unavailable.
  */
 @Slf4j
@@ -31,6 +32,9 @@ import java.util.List;
 @EnableScheduling
 @RequiredArgsConstructor
 public class OutboxPublisher {
+
+    private static final int MAX_RETRY_COUNT = 3;
+    private static final int CLEANUP_RETENTION_DAYS = 7;
 
     private final OutboxRepository outboxRepository;
     private final KafkaTemplate<String, SagaEvent> kafkaTemplate;
@@ -53,7 +57,7 @@ public class OutboxPublisher {
     @Transactional
     public void publishPendingEvents() {
         List<OutboxEvent> pendingEvents = outboxRepository.findPendingEventsWithLimit(batchSize);
-        
+
         if (pendingEvents.isEmpty()) {
             return;
         }
@@ -81,8 +85,8 @@ public class OutboxPublisher {
     @Scheduled(fixedDelay = 5000, initialDelay = 10000)
     @Transactional
     public void retryFailedEvents() {
-        List<OutboxEvent> failedEvents = outboxRepository.findRetryableEvents(3);
-        
+        List<OutboxEvent> failedEvents = outboxRepository.findRetryableEvents(MAX_RETRY_COUNT);
+
         if (failedEvents.isEmpty()) {
             return;
         }
@@ -111,7 +115,7 @@ public class OutboxPublisher {
     @Scheduled(fixedDelay = 3600000, initialDelay = 60000)
     @Transactional
     public void cleanupOldEvents() {
-        LocalDateTime threshold = LocalDateTime.now().minusDays(7);
+        LocalDateTime threshold = LocalDateTime.now().minusDays(CLEANUP_RETENTION_DAYS);
         int deleted = outboxRepository.deleteOldEvents(threshold);
         if (deleted > 0) {
             log.info("Cleaned up {} old outbox events", deleted);
@@ -139,7 +143,7 @@ public class OutboxPublisher {
      */
     private String determineTopic(OutboxEvent.EventType eventType) {
         // Commands go to account-service
-        if (eventType == OutboxEvent.EventType.DEBIT_REQUESTED || 
+        if (eventType == OutboxEvent.EventType.DEBIT_REQUESTED ||
             eventType == OutboxEvent.EventType.CREDIT_REQUESTED ||
             eventType == OutboxEvent.EventType.COMPENSATION_REQUESTED) {
             return commandsTopic;

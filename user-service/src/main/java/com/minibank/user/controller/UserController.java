@@ -1,21 +1,34 @@
 package com.minibank.user.controller;
 
-import com.minibank.user.dto.*;
-import com.minibank.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+import com.minibank.user.dto.AuthResponse;
+import com.minibank.user.dto.UserLoginRequest;
+import com.minibank.user.dto.UserRegistrationRequest;
+import com.minibank.user.dto.UserResponse;
+import com.minibank.user.dto.UserUpdateRequest;
+import com.minibank.user.service.UserService;
+
 /**
  * User Controller - REST API endpoints for user management.
- * 
+ *
  * Base path: /api/v1/users
- * 
+ *
  * Endpoints:
  * - POST /register - Register new user
  * - POST /login - Authenticate user
@@ -32,11 +45,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
+    private static final int BEARER_PREFIX_LENGTH = 7;
+
     private final UserService userService;
 
     /**
      * Register a new user.
-     * 
+     *
      * @param request registration request
      * @return created user
      */
@@ -49,7 +64,7 @@ public class UserController {
 
     /**
      * Authenticate user and get tokens.
-     * 
+     *
      * @param request login request
      * @return authentication response with tokens
      */
@@ -62,7 +77,7 @@ public class UserController {
 
     /**
      * Refresh access token.
-     * 
+     *
      * @param request refresh token request
      * @return new authentication response
      */
@@ -88,7 +103,7 @@ public class UserController {
 
     /**
      * Get current user (from JWT token).
-     * 
+     *
      * @param authHeader authorization header
      * @return user response
      */
@@ -102,7 +117,7 @@ public class UserController {
 
     /**
      * Update user profile.
-     * 
+     *
      * @param id user ID
      * @param request update request
      * @return updated user
@@ -118,7 +133,7 @@ public class UserController {
 
     /**
      * Delete user account (soft delete).
-     * 
+     *
      * @param id user ID
      * @return no content
      */
@@ -131,7 +146,7 @@ public class UserController {
 
     /**
      * Verify user email.
-     * 
+     *
      * @param id user ID
      * @return updated user
      */
@@ -144,7 +159,7 @@ public class UserController {
 
     /**
      * Verify user phone.
-     * 
+     *
      * @param id user ID
      * @return updated user
      */
@@ -171,7 +186,7 @@ public class UserController {
      */
     private String extractToken(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
+            return authHeader.substring(BEARER_PREFIX_LENGTH);
         }
         throw new IllegalArgumentException("Invalid authorization header");
     }

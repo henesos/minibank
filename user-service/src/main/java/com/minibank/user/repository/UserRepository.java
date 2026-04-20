@@ -1,6 +1,5 @@
 package com.minibank.user.repository;
 
-import com.minibank.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,9 +9,11 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.minibank.user.entity.User;
+
 /**
  * User Repository for database operations.
- * 
+ *
  * Extends JpaRepository for basic CRUD operations.
  * Custom queries for user lookup by various criteria.
  */
@@ -21,7 +22,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Finds a user by email address.
-     * 
+     *
      * @param email the email address to search for
      * @return Optional containing the user if found
      */
@@ -29,7 +30,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Finds a user by phone number.
-     * 
+     *
      * @param phone the phone number to search for
      * @return Optional containing the user if found
      */
@@ -37,7 +38,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Finds a user by national ID.
-     * 
+     *
      * @param nationalId the national ID to search for
      * @return Optional containing the user if found
      */
@@ -45,7 +46,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Checks if a user exists with the given email.
-     * 
+     *
      * @param email the email to check
      * @return true if a user exists with this email
      */
@@ -53,7 +54,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Checks if a user exists with the given phone.
-     * 
+     *
      * @param phone the phone to check
      * @return true if a user exists with this phone
      */
@@ -62,7 +63,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /**
      * Finds users whose accounts are locked until a time before now.
      * Used for unlocking accounts after lockout period.
-     * 
+     *
      * @param now the current time
      * @return list of users that should be unlocked
      */
@@ -72,7 +73,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /**
      * Finds active users who haven't logged in for a given period.
      * Used for security review and dormant account management.
-     * 
+     *
      * @param threshold the date threshold
      * @return list of dormant users
      */
@@ -81,7 +82,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Counts users by status.
-     * 
+     *
      * @param status the status to count
      * @return number of users with the given status
      */
@@ -89,7 +90,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Finds a user by ID and checks if they are active.
-     * 
+     *
      * @param id the user ID
      * @return Optional containing the active user if found
      */
@@ -98,7 +99,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Finds a user by email ignoring case.
-     * 
+     *
      * @param email the email to search for
      * @return Optional containing the user if found
      */

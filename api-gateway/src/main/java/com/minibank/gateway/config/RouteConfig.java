@@ -30,6 +30,7 @@ public class RouteConfig {
     @Value("${services.notification-service.url}")
     private String notificationServiceUrl;
 
+    /** Custom route locator bean for service routing. */
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()

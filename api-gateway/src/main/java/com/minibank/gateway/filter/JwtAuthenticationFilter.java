@@ -18,16 +18,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import javax.crypto.SecretKey;
 
 /**
  * JWT Authentication Filter for API Gateway
- * 
+ *
  * Validates JWT tokens on incoming requests and adds user information
  * to request headers for downstream services.
- * 
+ *
  * Public endpoints (no authentication required):
  * - /api/auth/login
  * - /api/auth/register
@@ -38,6 +38,9 @@ import java.util.List;
 @Slf4j
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
+
+    private static final int BEARER_PREFIX_LENGTH = 7;
+    private static final int FILTER_ORDER = -100;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -86,12 +89,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return onError(exchange, "Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED);
         }
 
-        String token = authHeader.substring(7);
+        String token = authHeader.substring(BEARER_PREFIX_LENGTH);
 
         try {
             // Validate and parse token
             Claims claims = validateToken(token);
-            
+
             // Extract user information
             String userId = claims.getSubject();
             String email = claims.get("email", String.class);
@@ -149,7 +152,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().add("Content-Type", "application/json");
-        
+
         String errorBody = String.format(
                 "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
                 status.value(),
@@ -157,7 +160,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 message,
                 exchange.getRequest().getPath().value()
         );
-        
+
         return exchange.getResponse()
                 .writeWith(Mono.just(exchange.getResponse()
                         .bufferFactory()
@@ -166,6 +169,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return -100; // High priority
+        return FILTER_ORDER;
     }
 }

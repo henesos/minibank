@@ -7,17 +7,17 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * MiniBank Notification Service Application
- * 
+ *
  * Handles notifications for MiniBank users.
  * Consumes transaction events from Kafka and sends notifications.
  * Runs on port 8084 by default.
- * 
+ *
  * Key Features:
  * - Multi-channel notifications (Email, SMS, Push, In-App)
  * - Kafka integration for event-driven notifications
  * - Idempotency support for duplicate prevention
  * - Retry mechanism for failed notifications
- * 
+ *
  * @author MiniBank Team
  */
 @SpringBootApplication
@@ -25,6 +25,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class NotificationServiceApplication {
 
+    /**
+     * Main entry point for the Notification Service.
+     *
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
         SpringApplication.run(NotificationServiceApplication.class, args);
     }

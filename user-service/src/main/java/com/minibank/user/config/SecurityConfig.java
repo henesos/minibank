@@ -1,6 +1,5 @@
 package com.minibank.user.config;
 
-import com.minibank.user.filter.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +18,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+
+import com.minibank.user.filter.JwtAuthenticationFilter;
 
 /**
  * Security Configuration for User Service.
@@ -40,8 +41,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final long CORS_MAX_AGE = 3600L;
+    private static final int BCRYPT_STRENGTH = 12;
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    /** Security filter chain bean for HTTP security configuration. */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -106,16 +111,17 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "X-User-ID", "X-User-Email"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        configuration.setMaxAge(CORS_MAX_AGE);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
+    /** Password encoder bean using BCrypt with configured strength. */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCPasswordEncoder(12);
+        return new BCPasswordEncoder(BCRYPT_STRENGTH);
     }
 
     /**

@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 
 /**
  * Base exception for User Service.
- * 
+ *
  * All custom exceptions in the user service should extend this class.
  * Provides consistent error handling with HTTP status and error code.
  */
@@ -15,12 +15,14 @@ public class UserServiceException extends RuntimeException {
     private final HttpStatus status;
     private final String errorCode;
 
+    /** Constructor. */
     public UserServiceException(String message, HttpStatus status, String errorCode) {
         super(message);
         this.status = status;
         this.errorCode = errorCode;
     }
 
+    /** Constructor with cause. */
     public UserServiceException(String message, HttpStatus status, String errorCode, Throwable cause) {
         super(message, cause);
         this.status = status;

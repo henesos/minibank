@@ -1,9 +1,5 @@
 package com.minibank.account.kafka;
 
-import com.minibank.account.dto.BalanceUpdateRequest;
-import com.minibank.account.exception.AccountNotFoundException;
-import com.minibank.account.exception.InsufficientBalanceException;
-import com.minibank.account.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -16,14 +12,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.minibank.account.dto.BalanceUpdateRequest;
+import com.minibank.account.exception.AccountNotFoundException;
+import com.minibank.account.exception.InsufficientBalanceException;
+import com.minibank.account.service.AccountService;
+
 /**
  * Saga Command Consumer for Account Service.
- * 
+ *
  * Listens to saga-commands topic and processes:
  * - DEBIT_REQUEST: Withdraw money from source account
  * - CREDIT_REQUEST: Deposit money to destination account
  * - COMPENSATE_DEBIT: Refund money to source account (rollback)
- * 
+ *
  * Publishes results to saga-events topic:
  * - DEBIT_SUCCESS / DEBIT_FAILURE
  * - CREDIT_SUCCESS / CREDIT_FAILURE
@@ -62,7 +63,7 @@ public class SagaCommandConsumer {
         UUID sagaId = parseUUID(event.get("sagaId"));
         UUID transactionId = parseUUID(event.get("transactionId"));
 
-        log.info("Received saga command: type={}, sagaId={}, transactionId={}", 
+        log.info("Received saga command: type={}, sagaId={}, transactionId={}",
                 eventType, sagaId, transactionId);
 
         try {
@@ -99,7 +100,7 @@ public class SagaCommandConsumer {
             // Withdraw from source account
             BalanceUpdateRequest request = new BalanceUpdateRequest();
             request.setAmount(amount);
-            
+
             accountService.withdraw(fromAccountId, request);
 
             log.info("DEBIT_SUCCESS: account={}, amount={}", fromAccountId, amount);
@@ -107,17 +108,17 @@ public class SagaCommandConsumer {
 
         } catch (InsufficientBalanceException e) {
             log.warn("DEBIT_FAILURE - Insufficient balance: account={}, amount={}", fromAccountId, amount);
-            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount,
                     "Insufficient balance: " + e.getMessage()));
 
         } catch (AccountNotFoundException e) {
             log.error("DEBIT_FAILURE - Account not found: {}", fromAccountId);
-            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount,
                     "Account not found: " + fromAccountId));
 
         } catch (Exception e) {
             log.error("DEBIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
-            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount,
                     "Unexpected error: " + e.getMessage()));
         }
     }
@@ -137,7 +138,7 @@ public class SagaCommandConsumer {
             // Deposit to destination account
             BalanceUpdateRequest request = new BalanceUpdateRequest();
             request.setAmount(amount);
-            
+
             accountService.deposit(toAccountId, request);
 
             log.info("CREDIT_SUCCESS: account={}, amount={}", toAccountId, amount);
@@ -145,12 +146,12 @@ public class SagaCommandConsumer {
 
         } catch (AccountNotFoundException e) {
             log.error("CREDIT_FAILURE - Account not found: {}", toAccountId);
-            publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount,
                     "Account not found: " + toAccountId));
 
         } catch (Exception e) {
             log.error("CREDIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
-            publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount,
                     "Unexpected error: " + e.getMessage()));
         }
     }
@@ -170,15 +171,16 @@ public class SagaCommandConsumer {
             // Refund to source account
             BalanceUpdateRequest request = new BalanceUpdateRequest();
             request.setAmount(amount);
-            
+
             accountService.deposit(fromAccountId, request);
 
             log.info("COMPENSATE_SUCCESS: account={}, amount={}", fromAccountId, amount);
-            publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_SUCCESS, fromAccountId, null, amount, null));
+            publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_SUCCESS,
+                    fromAccountId, null, amount, null));
 
         } catch (Exception e) {
             log.error("COMPENSATE_FAILURE - Error: {}", e.getMessage(), e);
-            publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_FAILURE, fromAccountId, null, amount, 
+            publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_FAILURE, fromAccountId, null, amount,
                     "Compensation failed: " + e.getMessage()));
         }
     }
@@ -204,14 +206,14 @@ public class SagaCommandConsumer {
      * Creates a response event map.
      */
     private Map<String, Object> createResponseEvent(
-            UUID sagaId, 
-            UUID transactionId, 
+            UUID sagaId,
+            UUID transactionId,
             String eventType,
             UUID fromAccountId,
             UUID toAccountId,
             BigDecimal amount,
             String errorMessage) {
-        
+
         Map<String, Object> event = new HashMap<>();
         event.put("eventId", UUID.randomUUID().toString());
         event.put("sagaId", sagaId != null ? sagaId.toString() : null);

@@ -13,6 +13,7 @@ import java.util.UUID;
  */
 public class AccessDeniedException extends AccountServiceException {
 
+    /** Constructor. */
     public AccessDeniedException(UUID accountId, UUID userId) {
         super(
                 String.format("User %s does not have access to account %s", userId, accountId),

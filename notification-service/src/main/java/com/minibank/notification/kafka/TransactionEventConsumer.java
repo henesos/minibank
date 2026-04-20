@@ -1,15 +1,11 @@
 package com.minibank.notification.kafka;
 
-import com.minibank.notification.dto.NotificationResponse;
-import com.minibank.notification.dto.TransactionEvent;
-import com.minibank.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -24,6 +20,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
+import com.minibank.notification.dto.NotificationResponse;
+import com.minibank.notification.dto.TransactionEvent;
+import com.minibank.notification.service.NotificationService;
 
 /**
  * Kafka consumer for transaction events.
@@ -48,6 +48,8 @@ public class TransactionEventConsumer {
     private final RedisTemplate<String, String> redisTemplate;
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "notification:event:";
+
+    private static final int DEFAULT_SCAN_COUNT = 1000;
 
     @Value("${notification.idempotency.ttl-hours:24}")
     private int idempotencyTtlHours;
@@ -203,7 +205,7 @@ public class TransactionEventConsumer {
             List<String> matchedKeys = new ArrayList<>();
             ScanOptions scanOptions = ScanOptions.scanOptions()
                     .match(IDEMPOTENCY_KEY_PREFIX + "*")
-                    .count(1000)
+                    .count(DEFAULT_SCAN_COUNT)
                     .build();
             try (Cursor<byte[]> cursor = connection.scan(scanOptions)) {
                 while (cursor.hasNext()) {

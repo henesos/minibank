@@ -1,8 +1,5 @@
 package com.minibank.transaction.controller;
 
-import com.minibank.transaction.dto.TransactionResponse;
-import com.minibank.transaction.dto.TransferRequest;
-import com.minibank.transaction.service.TransactionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -10,16 +7,26 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
+import com.minibank.transaction.dto.TransactionResponse;
+import com.minibank.transaction.dto.TransferRequest;
+import com.minibank.transaction.service.TransactionService;
+
 /**
  * Transaction Controller - REST API endpoints for money transfers.
- * 
+ *
  * Base path: /api/v1/transactions
- * 
+ *
  * Endpoints:
  * - POST / - Initiate new transfer
  * - GET /{id} - Get transaction by ID
@@ -38,7 +45,7 @@ public class TransactionController {
     /**
      * Get all transactions for the authenticated user with pagination.
      * Uses X-User-ID header from API Gateway (extracted from JWT).
-     * 
+     *
      * @param request HTTP request to get X-User-ID header
      * @param page page number (default 0)
      * @param size page size (default 20)
@@ -49,18 +56,19 @@ public class TransactionController {
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        
+
         String userIdHeader = request.getHeader("X-User-ID");
-        
+
         if (userIdHeader == null || userIdHeader.isEmpty()) {
             log.warn("X-User-ID header missing");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        
+
         UUID userId = UUID.fromString(userIdHeader);
         log.debug("Get transactions for authenticated user: {}, page: {}, size: {}", userId, page, size);
-        
-        Page<TransactionResponse> transactions = transactionService.getTransactionsByUserIdPaginated(userId, page, size);
+
+        Page<TransactionResponse> transactions = transactionService
+                .getTransactionsByUserIdPaginated(userId, page, size);
         return ResponseEntity.ok(transactions);
     }
 
@@ -69,9 +77,9 @@ public class TransactionController {
      */
     @PostMapping
     public ResponseEntity<TransactionResponse> initiateTransfer(@Valid @RequestBody TransferRequest request) {
-        log.info("Transfer request: from={}, to={}, amount={}", 
+        log.info("Transfer request: from={}, to={}, amount={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount());
-        
+
         TransactionResponse response = transactionService.initiateTransfer(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

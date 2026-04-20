@@ -13,12 +13,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.kafka.support.Acknowledgment;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -160,12 +163,20 @@ class TransactionEventConsumerTest {
         @Test
         @DisplayName("clearProcessedEvents() deletes Redis keys with correct pattern")
         void clearProcessedEvents_DeletesRedisKeys() {
+            // Arrange — mock RedisCallback execution to return some keys
+            Collection<String> mockKeys = List.of(
+                    "notification:event:key1",
+                    "notification:event:key2"
+            );
+            when(redisTemplate.execute(any(RedisCallback.class)))
+                    .thenReturn(mockKeys);
+
             // Act
             consumer.clearProcessedEvents();
 
-            // Assert — should call keys() with the correct pattern and then delete()
-            verify(redisTemplate).keys("notification:event:*");
-            verify(redisTemplate).delete(anySet());
+            // Assert — should use SCAN (via execute RedisCallback) and then delete
+            verify(redisTemplate).execute(any(RedisCallback.class));
+            verify(redisTemplate).delete(mockKeys);
         }
     }
 }

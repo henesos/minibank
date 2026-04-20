@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /**
  * DTO for account creation request.
- * 
+ *
  * Note: userId is optional in request body as it will be extracted
  * from X-User-ID header by the API Gateway.
  */

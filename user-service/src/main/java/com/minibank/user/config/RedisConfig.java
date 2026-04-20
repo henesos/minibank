@@ -15,7 +15,7 @@ import java.time.Duration;
 
 /**
  * Redis Configuration for caching and session management.
- * 
+ *
  * Cache Strategy:
  * - User profiles: 5 minutes TTL
  * - Sessions: 30 minutes TTL
@@ -24,12 +24,15 @@ import java.time.Duration;
 @Configuration
 public class RedisConfig {
 
+    private static final int CACHE_TTL_MINUTES = 5;
+
     @Value("${app.cache.user-ttl:300}")
     private Long userTtl;
 
     @Value("${app.cache.session-ttl:1800}")
     private Long sessionTtl;
 
+    /** Redis template bean for caching and session management. */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
@@ -42,24 +45,27 @@ public class RedisConfig {
         return template;
     }
 
+    /** Cache manager bean with per-cache TTL configuration. */
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer()))
                 .disableCachingNullValues();
 
         // Configure specific cache TTLs
         java.util.Map<String, RedisCacheConfiguration> cacheConfigurations = new java.util.HashMap<>();
-        
+
         // User profiles: 5 minutes TTL
         cacheConfigurations.put("users", defaultConfig.entryTtl(Duration.ofSeconds(userTtl)));
-        
+
         // Sessions: 30 minutes TTL
         cacheConfigurations.put("sessions", defaultConfig.entryTtl(Duration.ofSeconds(sessionTtl)));
 
         return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(defaultConfig.entryTtl(Duration.ofMinutes(5)))
+                .cacheDefaults(defaultConfig.entryTtl(Duration.ofMinutes(CACHE_TTL_MINUTES)))
                 .withInitialCacheConfigurations(cacheConfigurations)
                 .build();
     }

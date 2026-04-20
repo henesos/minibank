@@ -16,6 +16,7 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** Handles TransactionServiceException. */
     @ExceptionHandler(TransactionServiceException.class)
     public ResponseEntity<ErrorResponse> handleTransactionServiceException(TransactionServiceException ex) {
         ErrorResponse error = ErrorResponse.builder()
@@ -29,10 +30,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(error);
     }
 
+    /** Handles validation exceptions. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error -> 
+        ex.getBindingResult().getFieldErrors().forEach(error ->
             errors.put(error.getField(), error.getDefaultMessage())
         );
 
@@ -48,6 +50,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
+    /** Handles generic exceptions. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         ErrorResponse error = ErrorResponse.builder()
@@ -61,6 +64,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.internalServerError().body(error);
     }
 
+    /** Error response DTO. */
     @lombok.Data
     @lombok.Builder
     @lombok.NoArgsConstructor

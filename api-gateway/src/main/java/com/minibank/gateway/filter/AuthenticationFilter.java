@@ -10,12 +10,16 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Authentication filter for API Gateway.
+ */
 @Component
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     @Autowired
     private JwtUtil jwtUtil;
 
+    /** Constructor. */
     public AuthenticationFilter() {
         super(Config.class);
     }
@@ -55,6 +59,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         };
     }
 
+    /** Filter configuration class. */
     public static class Config {
         // Configuration properties if needed
     }
