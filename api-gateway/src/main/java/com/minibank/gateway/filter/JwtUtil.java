@@ -11,6 +11,11 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+/**
+ * JWT Utility for API Gateway.
+ *
+ * <p>Uses jjwt 0.12.x API (verifyWith, parseSignedClaims, getPayload).</p>
+ */
 @Component
 public class JwtUtil {
 
@@ -24,10 +29,10 @@ public class JwtUtil {
 
     public Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .setSigningKey(getSigningKey())
+                .verifyWith(getSigningKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public String extractUsername(String token) {

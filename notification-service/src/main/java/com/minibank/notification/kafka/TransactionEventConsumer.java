@@ -7,6 +7,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -15,7 +19,11 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Kafka consumer for transaction events.
@@ -185,10 +193,29 @@ public class TransactionEventConsumer {
     /**
      * Clears all idempotency keys from Redis (for testing only).
      *
+     * <p>Uses SCAN instead of KEYS to avoid blocking Redis in production.
+     * KEYS is O(N) and blocks the server — SCAN is incremental and non-blocking.</p>
+     *
      * <p>Deletes all keys matching the pattern {@code notification:event:*}.</p>
      */
     public void clearProcessedEvents() {
-        redisTemplate.delete(redisTemplate.keys(IDEMPOTENCY_KEY_PREFIX + "*"));
-        log.info("Cleared all idempotency keys from Redis");
+        Collection<String> keys = redisTemplate.execute((RedisCallback<Collection<String>>) connection -> {
+            List<String> matchedKeys = new ArrayList<>();
+            ScanOptions scanOptions = ScanOptions.scanOptions()
+                    .match(IDEMPOTENCY_KEY_PREFIX + "*")
+                    .count(1000)
+                    .build();
+            try (Cursor<byte[]> cursor = connection.scan(scanOptions)) {
+                while (cursor.hasNext()) {
+                    matchedKeys.add(new String(cursor.next(), StandardCharsets.UTF_8));
+                }
+            }
+            return matchedKeys;
+        });
+
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("Cleared {} idempotency keys from Redis", keys.size());
+        }
     }
 }

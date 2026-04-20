@@ -1,8 +1,6 @@
 package com.minibank.transaction.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.minibank.transaction.outbox.OutboxEvent;
 import com.minibank.transaction.outbox.OutboxRepository;
 import com.minibank.transaction.saga.SagaEvent;
@@ -36,6 +34,7 @@ public class OutboxPublisher {
 
     private final OutboxRepository outboxRepository;
     private final KafkaTemplate<String, SagaEvent> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.kafka.topic.commands:saga-commands}")
     private String commandsTopic;
@@ -124,15 +123,11 @@ public class OutboxPublisher {
      */
     private void publishEvent(OutboxEvent outboxEvent) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JavaTimeModule());
-            mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-
-            SagaEvent sagaEvent = mapper.readValue(outboxEvent.getPayload(), SagaEvent.class);
+            SagaEvent sagaEvent = objectMapper.readValue(outboxEvent.getPayload(), SagaEvent.class);
 
             String topic = determineTopic(outboxEvent.getEventType());
             kafkaTemplate.send(topic, outboxEvent.getSagaId().toString(), sagaEvent).get();
-            
+
             log.debug("Event sent to Kafka: topic={}, sagaId={}", topic, outboxEvent.getSagaId());
         } catch (Exception e) {
             throw new RuntimeException("Failed to publish event to Kafka", e);

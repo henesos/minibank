@@ -2,7 +2,6 @@ package com.minibank.user.controller;
 
 import com.minibank.user.dto.*;
 import com.minibank.user.service.UserService;
-import io.micrometer.tracing.annotation.SpanTag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -76,14 +75,12 @@ public class UserController {
 
     /**
      * Get user by ID.
-     * 
+     *
      * @param id user ID
      * @return user response
      */
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUserById(
-            @PathVariable UUID id,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    public ResponseEntity<UserResponse> getUserById(@PathVariable UUID id) {
         log.debug("Get user request for id: {}", id);
         UserResponse response = userService.getUserById(id);
         return ResponseEntity.ok(response);

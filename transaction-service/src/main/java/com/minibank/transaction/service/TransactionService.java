@@ -238,10 +238,13 @@ public class TransactionService {
     public List<TransactionResponse> getTransactionsByAccountId(UUID accountId) {
         List<Transaction> asSource = transactionRepository.findByFromAccountId(accountId);
         List<Transaction> asDestination = transactionRepository.findByToAccountId(accountId);
-        
-        asSource.addAll(asDestination);
-        
-        return asSource.stream()
+
+        // Merge into new list to avoid modifying repository-returned collections
+        List<Transaction> allTransactions = new java.util.ArrayList<>(asSource.size() + asDestination.size());
+        allTransactions.addAll(asSource);
+        allTransactions.addAll(asDestination);
+
+        return allTransactions.stream()
                 .distinct()
                 .map(TransactionResponse::fromEntity)
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))

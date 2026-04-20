@@ -185,11 +185,19 @@ public class SagaCommandConsumer {
 
     /**
      * Publishes an event to saga-events topic.
+     * Uses async send with error callback to detect delivery failures.
      */
     private void publishEvent(Map<String, Object> event) {
         String key = event.get("sagaId").toString();
-        kafkaTemplate.send(SAGA_EVENTS_TOPIC, key, event);
-        log.info("Published event: type={}, sagaId={}", event.get("eventType"), key);
+        kafkaTemplate.send(SAGA_EVENTS_TOPIC, key, event).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to publish event: type={}, sagaId={}, error={}",
+                        event.get("eventType"), key, ex.getMessage(), ex);
+            } else {
+                log.info("Published event: type={}, sagaId={}, offset={}",
+                        event.get("eventType"), key, result.getRecordMetadata().offset());
+            }
+        });
     }
 
     /**
@@ -219,15 +227,25 @@ public class SagaCommandConsumer {
     }
 
     private UUID parseUUID(Object value) {
-        if (value == null) return null;
+        if (value == null) {
+            throw new IllegalArgumentException("UUID value is null");
+        }
         if (value instanceof UUID) return (UUID) value;
-        return UUID.fromString(value.toString());
+        try {
+            return UUID.fromString(value.toString());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid UUID value: " + value, e);
+        }
     }
 
     private BigDecimal parseAmount(Object value) {
-        if (value == null) return BigDecimal.ZERO;
+        if (value == null) throw new IllegalArgumentException("Amount value is null");
         if (value instanceof BigDecimal) return (BigDecimal) value;
         if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
-        return new BigDecimal(value.toString());
+        try {
+            return new BigDecimal(value.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid amount value: " + value, e);
+        }
     }
 }
