@@ -38,6 +38,12 @@ public class TransferRequest {
     @Size(max = 100, message = "Idempotency key must not exceed 100 characters")
     private String idempotencyKey;
 
+    /**
+     * User ID initiating the transfer (sender).
+     * SECURITY: @NotNull ensures daily limit check cannot be bypassed
+     * by omitting this field. Set from X-User-ID header by controller.
+     */
+    @NotNull(message = "Source user ID is required for daily limit validation")
     private UUID fromUserId;
 
     private UUID toUserId;

@@ -1,5 +1,6 @@
 package com.minibank.notification.config;
 
+import com.minibank.notification.dto.TransactionEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,11 +16,9 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.minibank.notification.dto.TransactionEvent;
-
 /**
  * Kafka configuration for Notification Service.
- *
+ * 
  * Configures consumers for transaction events from transaction-service.
  */
 @EnableKafka
@@ -31,8 +30,6 @@ public class KafkaConfig {
 
     @Value("${spring.kafka.consumer.group-id:notification-service-group}")
     private String groupId;
-
-    private static final int DEFAULT_CONCURRENCY = 3;
 
     /**
      * Consumer factory for Kafka consumers.
@@ -46,14 +43,14 @@ public class KafkaConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-
+        
         // JSON deserializer configuration
-        props.put(JsonDeserializer.TRUSTED_PACKAGES,
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, 
                 "com.minibank.transaction.saga,com.minibank.notification.dto");
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE,
+        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, 
                 "com.minibank.notification.dto.TransactionEvent");
-
+        
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
@@ -61,19 +58,19 @@ public class KafkaConfig {
      * Kafka listener container factory.
      */
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, TransactionEvent>
+    public ConcurrentKafkaListenerContainerFactory<String, TransactionEvent> 
             kafkaListenerContainerFactory() {
-
+        
         ConcurrentKafkaListenerContainerFactory<String, TransactionEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
-
+        
         // Enable manual acknowledgment for at-least-once delivery
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-
+        
         // Concurrent consumers for scalability
-        factory.setConcurrency(DEFAULT_CONCURRENCY);
-
+        factory.setConcurrency(3);
+        
         return factory;
     }
 }

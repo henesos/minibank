@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,7 +18,7 @@ import java.util.Map;
 
 /**
  * Global Exception Handler for User Service.
- *
+ * 
  * Catches all exceptions and converts them to consistent API error responses.
  */
 @Slf4j
@@ -30,7 +31,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserServiceException.class)
     public ResponseEntity<ErrorResponse> handleUserServiceException(UserServiceException ex) {
         log.warn("UserServiceException: {} - {}", ex.getErrorCode(), ex.getMessage());
-
+        
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(ErrorResponse.builder()
@@ -39,6 +40,25 @@ public class GlobalExceptionHandler {
                         .error(ex.getStatus().getReasonPhrase())
                         .errorCode(ex.getErrorCode())
                         .message(ex.getMessage())
+                        .build());
+    }
+
+    /**
+     * Handle Spring Security AccessDeniedException (403 Forbidden).
+     * Security: Catches IDOR attempts and unauthorized access.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.builder()
+                        .timestamp(LocalDateTime.now())
+                        .status(HttpStatus.FORBIDDEN.value())
+                        .error("Forbidden")
+                        .errorCode("ACCESS_DENIED")
+                        .message("You do not have permission to access this resource")
                         .build());
     }
 

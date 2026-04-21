@@ -1,16 +1,15 @@
 package com.minibank.notification.service;
 
+import com.minibank.notification.entity.Notification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.regex.Pattern;
 
-import com.minibank.notification.entity.Notification;
-
 /**
  * Mock implementation of EmailService.
- *
+ * 
  * Simulates sending emails for development and testing purposes.
  * In production, replace with actual email provider integration.
  */
@@ -24,8 +23,6 @@ public class EmailServiceImpl implements EmailService {
 
     @Value("${notification.email.enabled:true}")
     private boolean emailEnabled;
-
-    private static final double MOCK_FAILURE_RATE = 0.01;
 
     @Value("${notification.email.from:noreply@minibank.com}")
     private String defaultFrom;
@@ -41,7 +38,7 @@ public class EmailServiceImpl implements EmailService {
         }
 
         String recipient = notification.getRecipient();
-
+        
         // If no recipient specified, simulate sending
         if (recipient == null || recipient.isEmpty()) {
             recipient = "user-" + notification.getUserId() + "@minibank.mock";
@@ -73,9 +70,9 @@ public class EmailServiceImpl implements EmailService {
         log.info("Content: {}", notification.getContent());
         log.info("Notification ID: {}", notification.getId());
         log.info("==================");
-
+        
         // Simulate potential failure (1% chance)
-        if (Math.random() < MOCK_FAILURE_RATE) {
+        if (Math.random() < 0.01) {
             log.warn("Simulated email failure for notification: {}", notification.getId());
             return false;
         }

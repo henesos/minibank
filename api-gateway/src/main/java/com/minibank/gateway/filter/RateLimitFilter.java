@@ -11,11 +11,11 @@ import reactor.core.publisher.Mono;
 
 /**
  * Rate Limit Filter
- *
+ * 
  * Rate limiting is primarily handled by Spring Cloud Gateway's built-in
  * RequestRateLimiter filter with Redis. This filter adds custom headers
  * and handles rate limit exceeded responses.
- *
+ * 
  * Configuration is done in application.yml:
  * - Default: 100 requests per second per IP
  * - Burst capacity: 200 requests
@@ -24,18 +24,16 @@ import reactor.core.publisher.Mono;
 @Component
 public class RateLimitFilter implements GlobalFilter, Ordered {
 
-    private static final int FILTER_ORDER = -50;
-
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         return chain.filter(exchange)
                 .onErrorResume(java.lang.RuntimeException.class, e -> {
                     if (e.getMessage() != null && e.getMessage().contains("Rate Limit Exceeded")) {
-                        log.warn("Rate limit exceeded for: {}",
+                        log.warn("Rate limit exceeded for: {}", 
                                 exchange.getRequest().getRemoteAddress());
                         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
                         exchange.getResponse().getHeaders().add("Content-Type", "application/json");
-
+                        
                         String errorBody = """
                                 {
                                     "status": 429,
@@ -44,7 +42,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
                                     "path": "%s"
                                 }
                                 """.formatted(exchange.getRequest().getPath().value());
-
+                        
                         return exchange.getResponse()
                                 .writeWith(Mono.just(exchange.getResponse()
                                         .bufferFactory()
@@ -56,6 +54,6 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return FILTER_ORDER;
+        return -50; // After authentication
     }
 }

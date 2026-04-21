@@ -7,11 +7,10 @@ import java.math.BigDecimal;
  */
 public class DailyLimitExceededException extends TransactionServiceException {
 
-    /** Constructor. */
     public DailyLimitExceededException(BigDecimal attempted, BigDecimal dailyLimit, BigDecimal alreadyTransferred) {
-        super(String.format("Daily transfer limit exceeded. Attempted: %s, Already transferred: %s, Limit: %s",
-              attempted, alreadyTransferred, dailyLimit),
-              org.springframework.http.HttpStatus.BAD_REQUEST,
+        super(String.format("Daily transfer limit exceeded. Attempted: %s, Already transferred: %s, Limit: %s", 
+              attempted, alreadyTransferred, dailyLimit), 
+              org.springframework.http.HttpStatus.BAD_REQUEST, 
               "DAILY_LIMIT_EXCEEDED");
     }
 }

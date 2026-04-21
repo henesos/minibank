@@ -1,5 +1,9 @@
 package com.minibank.account.service;
 
+import com.minibank.account.dto.*;
+import com.minibank.account.entity.Account;
+import com.minibank.account.exception.*;
+import com.minibank.account.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,19 +15,23 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.minibank.account.dto.AccountCreateRequest;
-import com.minibank.account.dto.AccountResponse;
-import com.minibank.account.dto.BalanceUpdateRequest;
-import com.minibank.account.entity.Account;
-import com.minibank.account.exception.AccessDeniedException;
-import com.minibank.account.exception.AccountNotFoundException;
-import com.minibank.account.exception.AccountServiceException;
-import com.minibank.account.exception.InactiveAccountException;
-import com.minibank.account.repository.AccountRepository;
-
 /**
  * Account Service - Business logic for account management.
- * CRITICAL: Balance is never cached. Uses atomic SQL updates for balance operations.
+ * 
+ * CRITICAL RULES FOR BALANCE OPERATIONS:
+ * 
+ * 1. BALANCE IS NEVER CACHED
+ *    - Always read from database
+ *    - No @Cacheable on balance-related methods
+ * 
+ * 2. USE ATOMIC UPDATES
+ *    - deductBalance() returns int (rows affected)
+ *    - 0 = failed (insufficient balance)
+ *    - 1 = success
+ * 
+ * 3. NO OPTIMISTIC LOCKING FOR BALANCE
+ *    - @Version is for entity updates
+ *    - Balance uses atomic SQL (UPDATE ... WHERE balance >= amount)
  */
 @Slf4j
 @Service
@@ -32,22 +40,15 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
 
-    /**
-     * Cryptographically strong random number generator for account number generation.
-     * Class-level singleton to avoid entropy drain from repeated instantiation.
-     * DO NOT use Math.random() or java.util.Random — they are predictable.
-     */
+    /** SecureRandom for cryptographically strong account number generation */
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private static final int BASE_DIGIT_COUNT = 10;
-    private static final int MAX_GENERATION_RETRIES = 5;
-    private static final int LUHN_MODULUS = 10;
-    private static final int LUHN_DOUBLING_THRESHOLD = 9;
-    private static final int ACCOUNT_NUMBER_LENGTH = 13;
+    /** Maximum retry attempts for account number collision */
+    private static final int MAX_ACCOUNT_NUMBER_RETRIES = 3;
 
     /**
      * Creates a new account for a user.
-     *
+     * 
      * @param request account creation request
      * @return created account response
      */
@@ -55,7 +56,7 @@ public class AccountService {
     public AccountResponse createAccount(AccountCreateRequest request) {
         log.info("Creating {} account for user: {}", request.getAccountType(), request.getUserId());
 
-        // Generate unique account number
+        // Generate unique account number with SecureRandom + Luhn check digit
         String accountNumber = generateAccountNumber();
 
         // Create account - ACTIVE by default for immediate use
@@ -89,7 +90,7 @@ public class AccountService {
     /**
      * Gets an account by ID.
      * Balance is always read from database - never cached.
-     *
+     * 
      * @param id account ID
      * @return account response
      */
@@ -101,8 +102,32 @@ public class AccountService {
     }
 
     /**
+     * Finds an account entity by ID (for ownership checks).
+     * 
+     * @param id account ID
+     * @return account entity
+     */
+    @Transactional(readOnly = true)
+    public Account findAccountById(UUID id) {
+        return accountRepository.findById(id)
+                .orElseThrow(() -> new AccountNotFoundException(id));
+    }
+
+    /**
+     * Finds an account entity by account number (for ownership checks).
+     * 
+     * @param accountNumber account number
+     * @return account entity
+     */
+    @Transactional(readOnly = true)
+    public Account findAccountByNumber(String accountNumber) {
+        return accountRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new AccountNotFoundException(accountNumber));
+    }
+
+    /**
      * Gets an account by account number.
-     *
+     * 
      * @param accountNumber account number
      * @return account response
      */
@@ -115,7 +140,7 @@ public class AccountService {
 
     /**
      * Gets all accounts for a user.
-     *
+     * 
      * @param userId user ID
      * @return list of accounts
      */
@@ -128,7 +153,7 @@ public class AccountService {
 
     /**
      * Gets current balance - ALWAYS from database, NEVER cached.
-     *
+     * 
      * @param id account ID
      * @return current balance
      */
@@ -140,7 +165,7 @@ public class AccountService {
 
     /**
      * Gets available balance - ALWAYS from database, NEVER cached.
-     *
+     * 
      * @param id account ID
      * @return available balance
      */
@@ -152,7 +177,7 @@ public class AccountService {
 
     /**
      * ATOMIC DEPOSIT - Adds money to account.
-     *
+     * 
      * @param id account ID
      * @param request deposit request
      * @return updated account response
@@ -170,8 +195,8 @@ public class AccountService {
 
         int result = accountRepository.addBalance(id, request.getAmount());
         if (result == 0) {
-            throw new AccountServiceException("Deposit failed",
-                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+            throw new AccountServiceException("Deposit failed", 
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, 
                 "DEPOSIT_FAILED");
         }
 
@@ -181,10 +206,10 @@ public class AccountService {
 
     /**
      * ATOMIC WITHDRAWAL - Deducts money from account.
-     *
+     * 
      * CRITICAL: Uses atomic SQL update with balance check.
      * Returns 0 if insufficient balance - no partial withdrawal.
-     *
+     * 
      * @param id account ID
      * @param request withdrawal request
      * @return updated account response
@@ -203,7 +228,7 @@ public class AccountService {
 
         // ATOMIC UPDATE - checks balance AND deducts in one SQL
         int result = accountRepository.deductBalance(id, request.getAmount());
-
+        
         if (result == 0) {
             // Get current balance for error message
             BigDecimal currentBalance = accountRepository.getBalanceById(id).orElse(BigDecimal.ZERO);
@@ -217,7 +242,7 @@ public class AccountService {
     /**
      * Transfers money between accounts.
      * Uses Saga Orchestrator for coordination.
-     *
+     * 
      * @param fromAccountId source account
      * @param toAccountId destination account
      * @param amount transfer amount
@@ -249,7 +274,7 @@ public class AccountService {
 
     /**
      * Activates an account.
-     *
+     * 
      * @param id account ID
      * @return updated account response
      */
@@ -269,7 +294,7 @@ public class AccountService {
 
     /**
      * Suspends an account.
-     *
+     * 
      * @param id account ID
      * @return updated account response
      */
@@ -289,7 +314,7 @@ public class AccountService {
 
     /**
      * Closes an account (soft delete).
-     *
+     * 
      * @param id account ID
      */
     @Transactional
@@ -315,104 +340,92 @@ public class AccountService {
     }
 
     /**
-     * Generates a cryptographically secure, unique account number with Luhn checksum.
-     * Format: MB + 10 random digits + 1 Luhn check digit = 13 characters.
-     *
-     * @return a unique, Luhn-valid account number
-     * @throws AccountServiceException if unique number cannot be generated after max retries
+     * Generates a unique account number using SecureRandom + Luhn check digit.
+     * 
+     * Format: MB + 10-digit SecureRandom number + 2-digit Luhn check digit
+     * Example: MB123456789078 (MB + 1234567890 + 78)
+     * 
+     * Includes collision retry mechanism (max 3 attempts).
+     * 
+     * @return unique account number
      */
     private String generateAccountNumber() {
-        for (int attempt = 0; attempt < MAX_GENERATION_RETRIES; attempt++) {
-            StringBuilder sb = new StringBuilder(BASE_DIGIT_COUNT);
-            for (int i = 0; i < BASE_DIGIT_COUNT; i++) {
-                sb.append(SECURE_RANDOM.nextInt(BASE_DIGIT_COUNT));
+        for (int attempt = 0; attempt < MAX_ACCOUNT_NUMBER_RETRIES; attempt++) {
+            // Generate 10 cryptographically random digits
+            StringBuilder digits = new StringBuilder(10);
+            for (int i = 0; i < 10; i++) {
+                digits.append(SECURE_RANDOM.nextInt(10));
             }
-            String baseDigits = sb.toString();
 
-            int checkDigit = calculateLuhnCheckDigit(baseDigits);
-            String accountNumber = "MB" + baseDigits + checkDigit;
+            // Compute 2-digit Luhn check digit from "MB" + 10 digits
+            String baseNumber = "MB" + digits;
+            int checkDigit = computeLuhnCheckDigit(baseNumber);
+            String accountNumber = baseNumber + String.format("%02d", checkDigit);
 
-            // Check uniqueness in DB
-            if (accountRepository.findByAccountNumber(accountNumber).isEmpty()) {
-                log.info("Generated account number: {} (attempt {})", accountNumber, attempt + 1);
+            // Check for collision
+            if (!accountRepository.findByAccountNumber(accountNumber).isPresent()) {
+                log.debug("Generated unique account number: {} (attempt {})", accountNumber, attempt + 1);
                 return accountNumber;
             }
 
-            log.warn("Account number collision detected: {} (attempt {} of {})",
-                    accountNumber, attempt + 1, MAX_GENERATION_RETRIES);
+            log.warn("Account number collision: {} (attempt {}), retrying...", accountNumber, attempt + 1);
         }
 
+        // All retries exhausted — extremely unlikely with SecureRandom 10 digits
+        log.error("Failed to generate unique account number after {} attempts", MAX_ACCOUNT_NUMBER_RETRIES);
         throw new AccountServiceException(
-                "Failed to generate unique account number after " + MAX_GENERATION_RETRIES + " attempts",
-                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                "ACCOUNT_NUMBER_GENERATION_FAILED"
+            "Failed to generate unique account number",
+            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+            "ACCOUNT_NUMBER_GENERATION_FAILED"
         );
     }
 
     /**
-     * Calculates the Luhn check digit for a given base digit string.
-     * The check digit makes the total sum of all digits divisible by 10.
-     *
-     * @param digits the base digits (only numeric characters)
-     * @return the Luhn check digit (0-9)
+     * Computes a 2-digit Luhn check digit for the given base string.
+     * 
+     * The Luhn algorithm is applied to the numeric characters of the input.
+     * Non-numeric characters (e.g., 'M', 'B') are converted to their
+     * Unicode code point modulo 10 to participate in the checksum.
+     * 
+     * @param base the base string (e.g., "MB1234567890")
+     * @return 2-digit check value (0-99)
      */
-    private int calculateLuhnCheckDigit(String digits) {
+    private int computeLuhnCheckDigit(String base) {
+        // Extract digits: for non-numeric chars, use (codePoint % 10) as digit
+        int[] digits = new int[base.length()];
+        for (int i = 0; i < base.length(); i++) {
+            char c = base.charAt(i);
+            if (Character.isDigit(c)) {
+                digits[i] = c - '0';
+            } else {
+                // Map letters to digits: M=7 (77%10), B=6 (66%10)
+                digits[i] = c % 10;
+            }
+        }
+
+        // Standard Luhn algorithm — double every second digit from right
         int sum = 0;
-        int len = digits.length();
-        for (int i = 0; i < len; i++) {
-            int d = digits.charAt(i) - '0';
-            // Position from the right in the full number (check digit is at position 0)
-            int positionFromRight = len - i;
-            if (positionFromRight % 2 == 1) {
+        boolean doubleDigit = true; // Start with doubling the rightmost
+        for (int i = digits.length - 1; i >= 0; i--) {
+            int d = digits[i];
+            if (doubleDigit) {
                 d *= 2;
-                if (d > LUHN_DOUBLING_THRESHOLD) {
-                    d -= LUHN_DOUBLING_THRESHOLD;
+                if (d > 9) {
+                    d -= 9;
                 }
             }
             sum += d;
-        }
-        return (LUHN_MODULUS - (sum % LUHN_MODULUS)) % LUHN_MODULUS;
-    }
-
-    /**
-     * Validates whether the given account number has correct format and passes Luhn check.
-     * Format: MB prefix, total 13 characters, remaining 11 are digits with valid Luhn checksum.
-     *
-     * @param accountNumber the account number to validate
-     * @return true if the account number is valid
-     */
-    public boolean isValidAccountNumber(String accountNumber) {
-        if (accountNumber == null || accountNumber.length() != ACCOUNT_NUMBER_LENGTH
-                || !accountNumber.startsWith("MB")) {
-            return false;
+            doubleDigit = !doubleDigit;
         }
 
-        String digits = accountNumber.substring(2);
-        for (int i = 0; i < digits.length(); i++) {
-            if (!Character.isDigit(digits.charAt(i))) {
-                return false;
-            }
-        }
-
-        int sum = 0;
-        int len = digits.length();
-        for (int i = 0; i < len; i++) {
-            int d = digits.charAt(i) - '0';
-            int positionFromRight = len - 1 - i;
-            if (positionFromRight % 2 == 1) {
-                d *= 2;
-                if (d > LUHN_DOUBLING_THRESHOLD) {
-                    d -= LUHN_DOUBLING_THRESHOLD;
-                }
-            }
-            sum += d;
-        }
-        return sum % LUHN_MODULUS == 0;
+        // Return 2-digit check: (100 - (sum % 100)) % 100
+        // This ensures the check digit is in range 0-99
+        return (100 - (sum % 100)) % 100;
     }
 
     /**
      * Checks if an account belongs to a user.
-     *
+     * 
      * @param accountId account ID
      * @param userId user ID
      * @return true if account belongs to user
@@ -420,76 +433,5 @@ public class AccountService {
     @Transactional(readOnly = true)
     public boolean isAccountOwner(UUID accountId, UUID userId) {
         return accountRepository.existsByIdAndUserId(accountId, userId);
-    }
-
-    /**
-     * Gets an account by ID after verifying ownership.
-     *
-     * <p>Use this method when the caller is an authenticated user (not an internal service).
-     * Verifies that the account belongs to the requesting user before returning data.</p>
-     *
-     * @param accountId account ID
-     * @param userId the authenticated user's ID (from JWT / X-User-ID header)
-     * @return account response
-     * @throws AccountNotFoundException if account does not exist
-     * @throws AccessDeniedException if user does not own the account
-     */
-    @Transactional(readOnly = true)
-    public AccountResponse getAccountByIdForUser(UUID accountId, UUID userId) {
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException(accountId));
-        if (!account.getUserId().equals(userId)) {
-            throw new AccessDeniedException(accountId, userId);
-        }
-        return AccountResponse.fromEntity(account);
-    }
-
-    /**
-     * Gets an account by account number after verifying ownership.
-     *
-     * <p>Use this method when the caller is an authenticated user (not an internal service).
-     * Verifies that the account belongs to the requesting user before returning data.</p>
-     *
-     * @param accountNumber account number
-     * @param userId the authenticated user's ID (from JWT / X-User-ID header)
-     * @return account response
-     * @throws AccountNotFoundException if account does not exist
-     * @throws AccessDeniedException if user does not own the account
-     */
-    @Transactional(readOnly = true)
-    public AccountResponse getAccountByNumberForUser(String accountNumber, UUID userId) {
-        Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new AccountNotFoundException(accountNumber));
-        if (!account.getUserId().equals(userId)) {
-            throw new AccessDeniedException(account.getId(), userId);
-        }
-        return AccountResponse.fromEntity(account);
-    }
-
-    /**
-     * Validates that an account exists, is active, and belongs to the given user.
-     *
-     * <p>Throws the appropriate exception for each failure case:
-     * <ul>
-     *   <li>{@link AccountNotFoundException} — account does not exist</li>
-     *   <li>{@link AccessDeniedException} — user does not own the account</li>
-     *   <li>{@link InactiveAccountException} — account is not active</li>
-     * </ul></p>
-     *
-     * @param accountId account ID
-     * @param userId the authenticated user's ID
-     * @return the account entity (for further processing in the calling method)
-     */
-    @Transactional(readOnly = true)
-    public Account validateAccountOwnership(UUID accountId, UUID userId) {
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException(accountId));
-        if (!account.getUserId().equals(userId)) {
-            throw new AccessDeniedException(accountId, userId);
-        }
-        if (!account.isActive()) {
-            throw new InactiveAccountException(accountId, account.getStatus().name());
-        }
-        return account;
     }
 }

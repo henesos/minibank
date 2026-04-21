@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * Global exception handler for Notification Service.
- *
+ * 
  * Handles all exceptions and returns consistent error responses.
  */
 @Slf4j
@@ -27,7 +27,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotificationNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotificationNotFound(NotificationNotFoundException ex) {
         log.warn("Notification not found: {}", ex.getMessage());
-
+        
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -35,7 +35,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .errorCode("NOTIFICATION_NOT_FOUND")
                 .build();
-
+        
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
@@ -45,7 +45,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateNotificationException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateNotification(DuplicateNotificationException ex) {
         log.warn("Duplicate notification: {}", ex.getMessage());
-
+        
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.CONFLICT.value())
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .errorCode("DUPLICATE_NOTIFICATION")
                 .build();
-
+        
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotificationServiceException.class)
     public ResponseEntity<ErrorResponse> handleNotificationServiceException(NotificationServiceException ex) {
         log.error("Notification service error: {}", ex.getMessage(), ex);
-
+        
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -71,7 +71,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .errorCode("NOTIFICATION_SERVICE_ERROR")
                 .build();
-
+        
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
@@ -81,14 +81,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
         log.warn("Validation error: {}", ex.getMessage());
-
+        
         Map<String, String> fieldErrors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
             fieldErrors.put(fieldName, errorMessage);
         });
-
+        
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -97,7 +97,7 @@ public class GlobalExceptionHandler {
                 .errorCode("VALIDATION_ERROR")
                 .fieldErrors(fieldErrors)
                 .build();
-
+        
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
@@ -106,8 +106,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error: ", ex);
-
+        log.error("Unexpected error: {}", ex.getMessage(), ex);
+        
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -115,7 +115,7 @@ public class GlobalExceptionHandler {
                 .message("An unexpected error occurred")
                 .errorCode("INTERNAL_ERROR")
                 .build();
-
+        
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 

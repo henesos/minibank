@@ -7,15 +7,15 @@ spring:
 
   cloud:
     gateway:
-      # Rate limiting disabled for local development
-      # default-filters:
-      #   - name: RequestRateLimiter
-      #     args:
-      #       redis-rate-limiter.replenishRate: 100
-      #       redis-rate-limiter.burstCapacity: 200
-      #       key-resolver: "#{@ipKeyResolver}"
+      # Rate limiting enabled — 100 requests/minute per IP
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            key-resolver: "#{@ipKeyResolver}"
 
-  # Redis configuration (optional)
+  # Redis configuration for rate limiting
   data:
     redis:
       host: localhost
@@ -33,9 +33,34 @@ services:
   notification-service:
     url: http://localhost:8084
 
-# JWT Configuration
+# JWT Configuration — externalized for production security
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:minibank-dev-only-secret-key-not-for-production-min-256-bits-long}
+
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+    instances:
+      user-service:
+        baseConfig: default
+      account-service:
+        baseConfig: default
+      transaction-service:
+        baseConfig: default
+      notification-service:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 10s
 
 # Actuator endpoints
 management:

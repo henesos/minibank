@@ -1,5 +1,6 @@
 package com.minibank.gateway.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -7,35 +8,53 @@ import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * CORS Configuration for API Gateway
  *
- * Allows frontend applications to communicate with the gateway
- * from different origins.
+ * Restricts cross-origin access to known frontend origins only.
+ * In production, set CORS_ALLOWED_ORIGINS environment variable to
+ * the comma-separated list of allowed domains (e.g. "https://minibank.com,https://app.minibank.com").
+ *
+ * Security: allowedOriginPatterns("*") is NOT used — all origins must be explicitly listed.
  */
 @Configuration
 public class CorsConfig {
 
-    private static final long CORS_MAX_AGE = 3600L;
+    /**
+     * Comma-separated list of additional allowed origins (e.g. production domains).
+     * Set via CORS_ALLOWED_ORIGINS environment variable.
+     */
+    @Value("${cors.allowed-origins:}")
+    private String extraAllowedOrigins;
 
-    /** CORS web filter bean configuration. */
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
 
-        // Allowed origins (configure for production)
-        // Using allowedOriginPatterns for wildcard support in Docker environment
-        corsConfig.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "http://localhost",
+        // Build the list of allowed origins from static + env-var sources
+        List<String> allowedOrigins = new java.util.ArrayList<>(Arrays.asList(
+                "http://localhost:80",        // Frontend default port
+                "http://localhost",           // Frontend without port
+                "http://127.0.0.1:80",
                 "http://127.0.0.1",
-                "http://frontend",          // Docker service name
-                "http://minibank-frontend", // Docker container name
-                "http://localhost:80",
-                "http://127.0.0.1:80"
+                "http://frontend",            // Docker service name
+                "http://minibank-frontend"    // Docker container name
         ));
+
+        // Add production origins from environment variable
+        if (extraAllowedOrigins != null && !extraAllowedOrigins.isBlank()) {
+            for (String origin : extraAllowedOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty()) {
+                    allowedOrigins.add(trimmed);
+                }
+            }
+        }
+
+        // Use allowedOrigins (not allowedOriginPatterns("*")) for security
+        corsConfig.setAllowedOrigins(allowedOrigins);
 
         // Allowed methods
         corsConfig.setAllowedMethods(Arrays.asList(
@@ -68,7 +87,7 @@ public class CorsConfig {
         corsConfig.setAllowCredentials(true);
 
         // Preflight cache duration (seconds)
-        corsConfig.setMaxAge(CORS_MAX_AGE);
+        corsConfig.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfig);

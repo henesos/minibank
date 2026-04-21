@@ -32,9 +32,17 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-  redis:
-    host: redis
-    port: 6379
+  # Redis configuration for idempotency tracking
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
 
 notification:
   email:
@@ -47,8 +55,6 @@ notification:
   push:
     enabled: false
     mock: true
-  idempotency:
-    ttl-hours: 24
 
 management:
   endpoints:

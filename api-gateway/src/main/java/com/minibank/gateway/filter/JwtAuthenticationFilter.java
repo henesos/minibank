@@ -18,16 +18,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import javax.crypto.SecretKey;
 
 /**
  * JWT Authentication Filter for API Gateway
- *
+ * 
  * Validates JWT tokens on incoming requests and adds user information
  * to request headers for downstream services.
- *
+ * 
  * Public endpoints (no authentication required):
  * - /api/auth/login
  * - /api/auth/register
@@ -38,9 +38,6 @@ import javax.crypto.SecretKey;
 @Slf4j
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
-
-    private static final int BEARER_PREFIX_LENGTH = 7;
-    private static final int FILTER_ORDER = -100;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -89,12 +86,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return onError(exchange, "Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED);
         }
 
-        String token = authHeader.substring(BEARER_PREFIX_LENGTH);
+        String token = authHeader.substring(7);
 
         try {
             // Validate and parse token
             Claims claims = validateToken(token);
-
+            
             // Extract user information
             String userId = claims.getSubject();
             String email = claims.get("email", String.class);
@@ -152,21 +149,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().add("Content-Type", "application/json");
-
-        String safeMessage = message.replace("\\", "").replace("\"", "").replace("\n", "")
-                .replace("\r", "").replace("\t", "");
-        String safePath = exchange.getRequest().getPath().value()
-                .replace("\\", "").replace("\"", "").replace("\n", "")
-                .replace("\r", "").replace("\t", "");
-
+        
         String errorBody = String.format(
                 "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
                 status.value(),
                 status.getReasonPhrase(),
-                safeMessage,
-                safePath
+                message,
+                exchange.getRequest().getPath().value()
         );
-
+        
         return exchange.getResponse()
                 .writeWith(Mono.just(exchange.getResponse()
                         .bufferFactory()
@@ -175,6 +166,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return FILTER_ORDER;
+        return -100; // High priority
     }
 }

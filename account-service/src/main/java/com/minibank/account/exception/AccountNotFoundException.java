@@ -9,17 +9,15 @@ import java.util.UUID;
  */
 public class AccountNotFoundException extends AccountServiceException {
 
-    /** Constructor with account ID. */
     public AccountNotFoundException(UUID id) {
-        super("Account not found with id: " + id,
-              HttpStatus.NOT_FOUND,
+        super("Account not found with id: " + id, 
+              HttpStatus.NOT_FOUND, 
               "ACCOUNT_NOT_FOUND");
     }
 
-    /** Constructor with account number. */
     public AccountNotFoundException(String accountNumber) {
-        super("Account not found with account number: " + accountNumber,
-              HttpStatus.NOT_FOUND,
+        super("Account not found with account number: " + accountNumber, 
+              HttpStatus.NOT_FOUND, 
               "ACCOUNT_NOT_FOUND");
     }
 }

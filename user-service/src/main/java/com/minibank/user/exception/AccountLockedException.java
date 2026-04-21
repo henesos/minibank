@@ -7,17 +7,15 @@ import org.springframework.http.HttpStatus;
  */
 public class AccountLockedException extends UserServiceException {
 
-    /** Constructor. */
     public AccountLockedException() {
-        super("Account is locked due to multiple failed login attempts",
-              HttpStatus.LOCKED,
+        super("Account is locked due to multiple failed login attempts", 
+              HttpStatus.LOCKED, 
               "ACCOUNT_LOCKED");
     }
 
-    /** Constructor with custom message. */
     public AccountLockedException(String message) {
-        super(message,
-              HttpStatus.LOCKED,
+        super(message, 
+              HttpStatus.LOCKED, 
               "ACCOUNT_LOCKED");
     }
 }

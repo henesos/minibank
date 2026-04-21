@@ -1,12 +1,11 @@
 package com.minibank.gateway.config;
 
+import com.minibank.gateway.handler.FallbackHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
-
-import com.minibank.gateway.handler.FallbackHandler;
 
 /**
  * Router configuration for fallback endpoints
@@ -14,7 +13,6 @@ import com.minibank.gateway.handler.FallbackHandler;
 @Configuration
 public class FallbackRouterConfig {
 
-    /** Fallback router bean for service fallback endpoints. */
     @Bean
     public RouterFunction<ServerResponse> fallbackRouter(FallbackHandler fallbackHandler) {
         return RouterFunctions.route()

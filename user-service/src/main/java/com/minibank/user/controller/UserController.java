@@ -1,43 +1,37 @@
 package com.minibank.user.controller;
 
+import com.minibank.user.dto.*;
+import com.minibank.user.exception.UserServiceException;
+import com.minibank.user.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-import com.minibank.user.dto.AuthResponse;
-import com.minibank.user.dto.UserLoginRequest;
-import com.minibank.user.dto.UserRegistrationRequest;
-import com.minibank.user.dto.UserResponse;
-import com.minibank.user.dto.UserUpdateRequest;
-import com.minibank.user.service.UserService;
-
 /**
  * User Controller - REST API endpoints for user management.
- *
+ * 
  * Base path: /api/v1/users
- *
+ * 
  * Endpoints:
  * - POST /register - Register new user
  * - POST /login - Authenticate user
  * - POST /refresh - Refresh access token
- * - GET /{id} - Get user by ID
- * - PUT /{id} - Update user profile
- * - DELETE /{id} - Delete user account
- * - POST /{id}/verify-email - Verify email
- * - POST /{id}/verify-phone - Verify phone
+ * - GET /{id} - Get user by ID (IDOR protected)
+ * - PUT /{id} - Update user profile (IDOR protected)
+ * - DELETE /{id} - Delete user account (IDOR protected)
+ * - POST /{id}/verify-email - Verify email (IDOR protected)
+ * - POST /{id}/verify-phone - Verify phone (IDOR protected)
+ * - GET /me - Get current user from X-User-ID header
+ * 
+ * Security:
+ * - IDOR Protection: X-User-ID header must match path variable {id}
+ * - API Gateway sets X-User-ID, X-User-Email, X-User-Role headers after JWT validation
  */
 @Slf4j
 @RestController
@@ -45,13 +39,11 @@ import com.minibank.user.service.UserService;
 @RequiredArgsConstructor
 public class UserController {
 
-    private static final int BEARER_PREFIX_LENGTH = 7;
-
     private final UserService userService;
 
     /**
      * Register a new user.
-     *
+     * 
      * @param request registration request
      * @return created user
      */
@@ -64,7 +56,7 @@ public class UserController {
 
     /**
      * Authenticate user and get tokens.
-     *
+     * 
      * @param request login request
      * @return authentication response with tokens
      */
@@ -77,7 +69,7 @@ public class UserController {
 
     /**
      * Refresh access token.
-     *
+     * 
      * @param request refresh token request
      * @return new authentication response
      */
@@ -90,55 +82,79 @@ public class UserController {
 
     /**
      * Get user by ID.
-     *
-     * @param id user ID
+     * 
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     * Only the authenticated user can access their own data.
+     * 
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
      * @return user response
      */
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable UUID id) {
+    public ResponseEntity<UserResponse> getUserById(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        // IDOR Fix: Verify authenticated user can only access their own data
+        validateUserIdMatch(id, request);
         log.debug("Get user request for id: {}", id);
         UserResponse response = userService.getUserById(id);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Get current user (from JWT token).
-     *
-     * @param authHeader authorization header
+     * Get current user (from X-User-ID header set by API Gateway).
+     * 
+     * Security: Uses X-User-ID header instead of parsing JWT token,
+     * since API Gateway already validated the JWT.
+     * 
+     * @param request HTTP request (to read X-User-ID header)
      * @return user response
      */
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getCurrentUser(
-            @RequestHeader("Authorization") String authHeader) {
-        String token = extractToken(authHeader);
-        UserResponse response = userService.validateToken(token);
+    public ResponseEntity<UserResponse> getCurrentUser(HttpServletRequest request) {
+        UUID userId = getAuthenticatedUserId(request);
+        log.debug("Get current user request for id: {}", userId);
+        UserResponse response = userService.getUserById(userId);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Update user profile.
-     *
-     * @param id user ID
-     * @param request update request
+     * 
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     * 
+     * @param id user ID (path variable)
+     * @param updateRequest update request
+     * @param request HTTP request (to read X-User-ID header)
      * @return updated user
      */
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateProfile(
             @PathVariable UUID id,
-            @Valid @RequestBody UserUpdateRequest request) {
+            @Valid @RequestBody UserUpdateRequest updateRequest,
+            HttpServletRequest request) {
+        // IDOR Fix: Verify authenticated user can only update their own profile
+        validateUserIdMatch(id, request);
         log.info("Update profile request for user: {}", id);
-        UserResponse response = userService.updateProfile(id, request);
+        UserResponse response = userService.updateProfile(id, updateRequest);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Delete user account (soft delete).
-     *
-     * @param id user ID
+     * 
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     * 
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
      * @return no content
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAccount(@PathVariable UUID id) {
+    public ResponseEntity<Void> deleteAccount(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        // IDOR Fix: Verify authenticated user can only delete their own account
+        validateUserIdMatch(id, request);
         log.info("Delete account request for user: {}", id);
         userService.deleteAccount(id);
         return ResponseEntity.noContent().build();
@@ -146,12 +162,19 @@ public class UserController {
 
     /**
      * Verify user email.
-     *
-     * @param id user ID
+     * 
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     * 
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
      * @return updated user
      */
     @PostMapping("/{id}/verify-email")
-    public ResponseEntity<UserResponse> verifyEmail(@PathVariable UUID id) {
+    public ResponseEntity<UserResponse> verifyEmail(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        // IDOR Fix: Verify authenticated user can only verify their own email
+        validateUserIdMatch(id, request);
         log.info("Verify email request for user: {}", id);
         UserResponse response = userService.verifyEmail(id);
         return ResponseEntity.ok(response);
@@ -159,12 +182,19 @@ public class UserController {
 
     /**
      * Verify user phone.
-     *
-     * @param id user ID
+     * 
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     * 
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
      * @return updated user
      */
     @PostMapping("/{id}/verify-phone")
-    public ResponseEntity<UserResponse> verifyPhone(@PathVariable UUID id) {
+    public ResponseEntity<UserResponse> verifyPhone(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        // IDOR Fix: Verify authenticated user can only verify their own phone
+        validateUserIdMatch(id, request);
         log.info("Verify phone request for user: {}", id);
         UserResponse response = userService.verifyPhone(id);
         return ResponseEntity.ok(response);
@@ -181,14 +211,60 @@ public class UserController {
                 .build());
     }
 
+    // ==================== Security Helper Methods ====================
+
     /**
-     * Extracts token from Authorization header.
+     * Extracts authenticated user ID from X-User-ID header set by API Gateway.
+     * 
+     * Security: API Gateway validates JWT and sets this header.
+     * User Service trusts this header on internal network.
+     * 
+     * @param request HTTP request containing gateway headers
+     * @return UUID of the authenticated user
+     * @throws UserServiceException if X-User-ID header is missing or invalid
      */
-    private String extractToken(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(BEARER_PREFIX_LENGTH);
+    private UUID getAuthenticatedUserId(HttpServletRequest request) {
+        String userIdHeader = request.getHeader("X-User-ID");
+        if (userIdHeader == null || userIdHeader.isBlank()) {
+            throw new UserServiceException(
+                "Missing authentication header",
+                HttpStatus.UNAUTHORIZED,
+                "MISSING_AUTH_HEADER"
+            );
         }
-        throw new IllegalArgumentException("Invalid authorization header");
+        try {
+            return UUID.fromString(userIdHeader);
+        } catch (IllegalArgumentException e) {
+            throw new UserServiceException(
+                "Invalid user identifier in authentication header",
+                HttpStatus.UNAUTHORIZED,
+                "INVALID_AUTH_HEADER"
+            );
+        }
+    }
+
+    /**
+     * Validates that the authenticated user (from X-User-ID header) matches
+     * the requested resource ID (path variable).
+     * 
+     * Security: IDOR (Insecure Direct Object Reference) protection.
+     * Prevents users from accessing or modifying other users' data.
+     * 
+     * @param pathId the user ID from the path variable
+     * @param request HTTP request containing X-User-ID header
+     * @throws UserServiceException with 403 Forbidden if IDs don't match
+     */
+    private void validateUserIdMatch(UUID pathId, HttpServletRequest request) {
+        UUID authenticatedId = getAuthenticatedUserId(request);
+        if (!pathId.equals(authenticatedId)) {
+            log.warn("IDOR attempt: authenticated user {} tried to access resource of user {}",
+                    authenticatedId, pathId);
+            throw new UserServiceException(
+                "Access denied: You can only access your own resources",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
     }
 
     /**

@@ -1,20 +1,7 @@
 package com.minibank.user.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.data.annotation.CreatedBy;
@@ -28,10 +15,10 @@ import java.util.UUID;
 
 /**
  * User Entity for MiniBank
- *
+ * 
  * Represents a bank customer with authentication credentials and profile information.
  * Uses soft delete pattern - deleted records are marked but preserved for audit.
- *
+ * 
  * Security considerations:
  * - Password is stored as bcrypt hash (never plain text)
  * - Email and phone must be unique
@@ -164,7 +151,7 @@ public class User {
 
     /**
      * Increments failed login attempts and locks account if threshold exceeded.
-     *
+     * 
      * @param maxAttempts maximum allowed failed attempts
      * @param lockDurationMinutes how long to lock the account
      */
@@ -191,7 +178,7 @@ public class User {
         if (firstName == null && lastName == null) {
             return null;
         }
-        return String.join(" ",
+        return String.join(" ", 
             firstName != null ? firstName : "",
             lastName != null ? lastName : ""
         ).trim();

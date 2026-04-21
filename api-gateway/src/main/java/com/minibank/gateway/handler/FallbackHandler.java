@@ -9,28 +9,24 @@ import reactor.core.publisher.Mono;
 
 /**
  * Fallback Handler for Circuit Breaker
- *
+ * 
  * Provides fallback responses when downstream services are unavailable.
  */
 @Component
 public class FallbackHandler {
 
-    /** Fallback for User Service. */
     public Mono<ServerResponse> userServiceFallback(ServerRequest request) {
         return createFallbackResponse("User Service", request);
     }
 
-    /** Fallback for Account Service. */
     public Mono<ServerResponse> accountServiceFallback(ServerRequest request) {
         return createFallbackResponse("Account Service", request);
     }
 
-    /** Fallback for Transaction Service. */
     public Mono<ServerResponse> transactionServiceFallback(ServerRequest request) {
         return createFallbackResponse("Transaction Service", request);
     }
 
-    /** Fallback for Notification Service. */
     public Mono<ServerResponse> notificationServiceFallback(ServerRequest request) {
         return createFallbackResponse("Notification Service", request);
     }

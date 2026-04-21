@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Transaction event DTO received from Kafka.
- *
+ * 
  * This DTO represents transaction events published by transaction-service
  * that need to trigger notifications to users.
  */
@@ -97,22 +97,22 @@ public class TransactionEvent {
     public enum TransactionEventType {
         // Transaction initiated
         TRANSACTION_INITIATED,
-
+        
         // Debit from source account completed
         DEBIT_COMPLETED,
-
+        
         // Credit to destination completed
         CREDIT_COMPLETED,
-
+        
         // Transaction fully completed
         TRANSACTION_COMPLETED,
-
+        
         // Transaction failed
         TRANSACTION_FAILED,
-
+        
         // Compensation started
         COMPENSATION_STARTED,
-
+        
         // Compensation completed
         COMPENSATION_COMPLETED
     }

@@ -1,17 +1,5 @@
 package com.minibank.notification.service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
 import com.minibank.notification.dto.NotificationRequest;
 import com.minibank.notification.dto.NotificationResponse;
 import com.minibank.notification.dto.TransactionEvent;
@@ -22,12 +10,29 @@ import com.minibank.notification.exception.DuplicateNotificationException;
 import com.minibank.notification.exception.NotificationNotFoundException;
 import com.minibank.notification.exception.NotificationServiceException;
 import com.minibank.notification.repository.NotificationRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing notifications.
  *
  * Handles creation, sending, and tracking of notifications
  * across multiple channels (email, SMS, push, in-app).
+ *
+ * Bug fix: handleSendFailure() now correctly keeps status as PENDING
+ * when retries remain, instead of incorrectly marking as FAILED.
+ * A @Scheduled method retries PENDING notifications with retryCount > 0.
  */
 @Slf4j
 @Service
@@ -40,8 +45,6 @@ public class NotificationService {
 
     @Value("${notification.retry.max-attempts:3}")
     private int defaultMaxRetries;
-
-    private static final int DEFAULT_BATCH_SIZE = 100;
 
     /**
      * Creates and queues a new notification.
@@ -153,17 +156,25 @@ public class NotificationService {
 
     /**
      * Handles a failed send attempt.
+     *
+     * BUG FIX: Previously this always called markAsFailed(), which set the
+     * status to FAILED even when retries remained. Now:
+     * - If retryCount < maxRetries → status stays PENDING so the scheduled
+     *   retry job can pick it up again.
+     * - If retryCount >= maxRetries → status becomes FAILED permanently.
      */
     private void handleSendFailure(Notification notification, String errorMessage) {
         notification.incrementRetry();
 
         if (notification.getRetryCount() >= notification.getMaxRetries()) {
+            // No more retries — mark as permanently failed
             notification.markAsFailed(errorMessage);
-            log.error("Notification {} failed after {} attempts: {}",
+            log.error("Notification {} failed permanently after {} attempts: {}",
                     notification.getId(), notification.getRetryCount(), errorMessage);
         } else {
-            notification.markAsFailed(errorMessage);
-            log.warn("Notification {} failed, attempt {}/{}: {}",
+            // Retries remaining — keep status as PENDING for scheduled retry
+            // incrementRetry() already sets status to PENDING when retries remain
+            log.warn("Notification {} send failed, attempt {}/{}: {} — will retry",
                     notification.getId(),
                     notification.getRetryCount(),
                     notification.getMaxRetries(),
@@ -172,84 +183,156 @@ public class NotificationService {
     }
 
     /**
+     * Scheduled retry job: runs every 30 seconds to re-attempt PENDING
+     * notifications that have been retried at least once (retryCount > 0).
+     *
+     * This handles notifications that failed to send but still have retries
+     * remaining. @EnableScheduling is declared on NotificationServiceApplication.
+     */
+    @Scheduled(fixedDelay = 30000)
+    @Transactional
+    public void retryPendingNotifications() {
+        List<Notification> pendingRetries = notificationRepository
+                .findByStatusAndRetryCountGreaterThan(NotificationStatus.PENDING, 0);
+
+        if (pendingRetries.isEmpty()) {
+            return;
+        }
+
+        log.info("Retrying {} pending notifications", pendingRetries.size());
+
+        int retried = 0;
+        for (Notification notification : pendingRetries) {
+            try {
+                sendNotification(notification.getId());
+                retried++;
+            } catch (Exception e) {
+                log.error("Retry failed for notification {}: {}",
+                        notification.getId(), e.getMessage());
+            }
+        }
+
+        log.info("Successfully retried {} out of {} pending notifications",
+                retried, pendingRetries.size());
+    }
+
+    /**
      * Creates notification from transaction event.
+     *
+     * @param event   the transaction event
+     * @param isSender true = notification for sender (fromUserId),
+     *                 false = notification for receiver (toUserId)
      */
     @Transactional
-    public NotificationResponse createFromTransactionEvent(TransactionEvent event) {
-        log.debug("Creating notification from transaction event: {}", event.getEventType());
+    public NotificationResponse createFromTransactionEvent(TransactionEvent event, boolean isSender) {
+        log.debug("Creating notification from transaction event: {} (isSender: {})",
+                event.getEventType(), isSender);
 
-        String idempotencyKey = "tx-" + event.getEventId();
+        String idempotencyKey = "tx-" + event.getEventId() + (isSender ? "-sender" : "-receiver");
 
-        // Determine notification content based on event type
-        String subject = generateSubject(event);
-        String content = generateContent(event);
+        // Determine notification content based on event type and role
+        String subject = generateSubject(event, isSender);
+        String content = generateContent(event, isSender);
 
-        // Notify the sender (fromUserId)
-        NotificationRequest senderRequest = NotificationRequest.builder()
-                .userId(event.getFromUserId())
+        // Select the target user
+        UUID targetUserId = isSender ? event.getFromUserId() : event.getToUserId();
+
+        NotificationRequest request = NotificationRequest.builder()
+                .userId(targetUserId)
                 .type(NotificationType.EMAIL)
                 .subject(subject)
                 .content(content)
                 .referenceId(event.getSagaId())
                 .referenceType("TRANSACTION")
-                .idempotencyKey(idempotencyKey + "-sender")
+                .idempotencyKey(idempotencyKey)
                 .build();
 
-        return createNotification(senderRequest);
+        return createNotification(request);
     }
 
     /**
-     * Generates notification subject based on transaction event.
+     * Backward-compatible overload: defaults to sender notification.
      */
-    private String generateSubject(TransactionEvent event) {
-        switch (event.getEventType()) {
-            case TRANSACTION_INITIATED:
-                return "İşleminiz Başlatıldı - MiniBank";
-            case TRANSACTION_COMPLETED:
-                return "İşleminiz Tamamlandı - MiniBank";
-            case TRANSACTION_FAILED:
-                return "İşlem Başarısız - MiniBank";
-            case COMPENSATION_COMPLETED:
-                return "İşlem İptal Edildi - MiniBank";
-            default:
-                return "İşlem Durumu Güncellendi - MiniBank";
+    @Transactional
+    public NotificationResponse createFromTransactionEvent(TransactionEvent event) {
+        return createFromTransactionEvent(event, true);
+    }
+
+    /**
+     * Generates notification subject based on transaction event and role.
+     */
+    private String generateSubject(TransactionEvent event, boolean isSender) {
+        if (isSender) {
+            switch (event.getEventType()) {
+                case TRANSACTION_INITIATED:
+                    return "İşleminiz Başlatıldı - MiniBank";
+                case TRANSACTION_COMPLETED:
+                    return "İşleminiz Tamamlandı - MiniBank";
+                case TRANSACTION_FAILED:
+                    return "İşlem Başarısız - MiniBank";
+                case COMPENSATION_COMPLETED:
+                    return "İşlem İptal Edildi - MiniBank";
+                default:
+                    return "İşlem Durumu Güncellendi - MiniBank";
+            }
+        } else {
+            // Receiver perspective
+            switch (event.getEventType()) {
+                case TRANSACTION_COMPLETED:
+                    return "Hesabınıza Transfer Alındı - MiniBank";
+                default:
+                    return "İşlem Durumu Güncellendi - MiniBank";
+            }
         }
     }
 
     /**
-     * Generates notification content based on transaction event.
+     * Generates notification content based on transaction event and role.
      */
-    private String generateContent(TransactionEvent event) {
+    private String generateContent(TransactionEvent event, boolean isSender) {
         StringBuilder sb = new StringBuilder();
 
-        switch (event.getEventType()) {
-            case TRANSACTION_INITIATED:
-                sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başlatılmıştır.\n",
-                        event.getAmount(), event.getCurrency()));
-                sb.append("İşlem tamamlandığında bilgilendirileceksiniz.\n\n");
-                break;
-            case TRANSACTION_COMPLETED:
-                sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başarıyla tamamlanmıştır.\n",
-                        event.getAmount(), event.getCurrency()));
-                break;
-            case TRANSACTION_FAILED:
-                sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz gerçekleştirilemedi.\n",
-                        event.getAmount(), event.getCurrency()));
-                if (event.getFailureReason() != null) {
-                    sb.append("Hata nedeni: ").append(event.getFailureReason()).append("\n");
-                }
-                break;
-            case COMPENSATION_COMPLETED:
-                sb.append("Sayın Müşterimiz,\n\n");
-                sb.append(String.format("%.2f %s tutarındaki transfer işleminiz iptal edilmiş olup,\n",
-                        event.getAmount(), event.getCurrency()));
-                sb.append("tutar hesabınıza iade edilmiştir.\n");
-                break;
-            default:
-                sb.append("İşlem durumunuz güncellenmiştir.\n");
+        if (isSender) {
+            switch (event.getEventType()) {
+                case TRANSACTION_INITIATED:
+                    sb.append("Sayın Müşterimiz,\n\n");
+                    sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başlatılmıştır.\n",
+                            event.getAmount(), event.getCurrency()));
+                    sb.append("İşlem tamamlandığında bilgilendirileceksiniz.\n\n");
+                    break;
+                case TRANSACTION_COMPLETED:
+                    sb.append("Sayın Müşterimiz,\n\n");
+                    sb.append(String.format("%.2f %s tutarındaki transfer işleminiz başarıyla tamamlanmıştır.\n",
+                            event.getAmount(), event.getCurrency()));
+                    break;
+                case TRANSACTION_FAILED:
+                    sb.append("Sayın Müşterimiz,\n\n");
+                    sb.append(String.format("%.2f %s tutarındaki transfer işleminiz gerçekleştirilemedi.\n",
+                            event.getAmount(), event.getCurrency()));
+                    if (event.getFailureReason() != null) {
+                        sb.append("Hata nedeni: ").append(event.getFailureReason()).append("\n");
+                    }
+                    break;
+                case COMPENSATION_COMPLETED:
+                    sb.append("Sayın Müşterimiz,\n\n");
+                    sb.append(String.format("%.2f %s tutarındaki transfer işleminiz iptal edilmiş olup,\n",
+                            event.getAmount(), event.getCurrency()));
+                    sb.append("tutar hesabınıza iade edilmiştir.\n");
+                    break;
+                default:
+                    sb.append("İşlem durumunuz güncellenmiştir.\n");
+            }
+        } else {
+            // Receiver perspective
+            switch (event.getEventType()) {
+                case TRANSACTION_COMPLETED:
+                    sb.append("Sayın Müşterimiz,\n\n");
+                    sb.append(String.format("Hesabınıza %.2f %s tutarında transfer alınmıştır.\n",
+                            event.getAmount(), event.getCurrency()));
+                    break;
+                default:
+                    sb.append("Hesabınızla ilgili işlem durumunuz güncellenmiştir.\n");
+            }
         }
 
         sb.append("\nSaygılarımızla,\nMiniBank");
@@ -291,7 +374,7 @@ public class NotificationService {
      */
     @Transactional
     public int processPendingNotifications() {
-        List<Notification> pending = notificationRepository.findPendingNotifications(DEFAULT_BATCH_SIZE);
+        List<Notification> pending = notificationRepository.findPendingNotifications(100);
         int processed = 0;
 
         for (Notification notification : pending) {

@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /**
  * Request Logging Filter
- *
+ * 
  * Logs all incoming requests with:
  * - Unique request ID
  * - HTTP method and path
@@ -23,8 +23,6 @@ import java.util.UUID;
 @Component
 public class RequestLoggingFilter implements GlobalFilter, Ordered {
 
-    private static final int SHORT_ID_LENGTH = 8;
-    private static final int FILTER_ORDER = -200;
     private static final String REQUEST_ID_HEADER = "X-Request-ID";
     private static final String REQUEST_START_TIME = "requestStartTime";
 
@@ -35,7 +33,7 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
         // Generate or use existing request ID
         String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
         if (requestId == null || requestId.isEmpty()) {
-            requestId = UUID.randomUUID().toString().substring(0, SHORT_ID_LENGTH);
+            requestId = UUID.randomUUID().toString().substring(0, 8);
         }
 
         // Store start time
@@ -64,6 +62,6 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return FILTER_ORDER;
+        return -200; // Execute first
     }
 }

@@ -1,5 +1,6 @@
 package com.minibank.notification.dto;
 
+import com.minibank.notification.entity.Notification.NotificationType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -9,8 +10,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
-
-import com.minibank.notification.entity.Notification.NotificationType;
 
 /**
  * Request DTO for creating a new notification.

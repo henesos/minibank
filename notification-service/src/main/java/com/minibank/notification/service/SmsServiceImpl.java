@@ -1,16 +1,15 @@
 package com.minibank.notification.service;
 
+import com.minibank.notification.entity.Notification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.regex.Pattern;
 
-import com.minibank.notification.entity.Notification;
-
 /**
  * Mock implementation of SmsService.
- *
+ * 
  * Simulates sending SMS messages for development and testing purposes.
  * In production, replace with actual SMS gateway integration.
  */
@@ -22,10 +21,6 @@ public class SmsServiceImpl implements SmsService {
     private static final Pattern PHONE_PATTERN = Pattern.compile(
             "^(\\+90|0)?[5][0-9]{9}$"
     );
-
-    private static final int MAX_SMS_LENGTH = 160;
-
-    private static final int SMS_TRUNCATION_LENGTH = 157;
 
     @Value("${notification.sms.enabled:false}")
     private boolean smsEnabled;
@@ -41,7 +36,7 @@ public class SmsServiceImpl implements SmsService {
         }
 
         String recipient = notification.getRecipient();
-
+        
         if (recipient == null || recipient.isEmpty()) {
             log.warn("No phone number provided for SMS notification: {}", notification.getId());
             return false;
@@ -57,7 +52,7 @@ public class SmsServiceImpl implements SmsService {
         }
 
         // In production, integrate with actual SMS gateway here
-        log.info("Would send SMS to: {} with content: {}", recipient,
+        log.info("Would send SMS to: {} with content: {}", recipient, 
                 truncateContent(notification.getContent()));
         return true;
     }
@@ -71,7 +66,7 @@ public class SmsServiceImpl implements SmsService {
         log.info("Content: {}", truncateContent(notification.getContent()));
         log.info("Notification ID: {}", notification.getId());
         log.info("================");
-
+        
         return true;
     }
 
@@ -82,8 +77,7 @@ public class SmsServiceImpl implements SmsService {
         if (content == null) {
             return "";
         }
-        return content.length() > MAX_SMS_LENGTH
-                ? content.substring(0, SMS_TRUNCATION_LENGTH) + "..." : content;
+        return content.length() > 160 ? content.substring(0, 157) + "..." : content;
     }
 
     @Override

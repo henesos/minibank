@@ -39,7 +39,7 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
       - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable must be set}
+      - JWT_SECRET=${JWT_SECRET:-minibank-super-secret-key-for-development-only-min-256-bits}
     depends_on:
       redis:
         condition: service_healthy
@@ -79,7 +79,7 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
       - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable must be set}
+      - JWT_SECRET=${JWT_SECRET:-minibank-super-secret-key-for-development-only-min-256-bits}
     depends_on:
       user-db:
         condition: service_healthy

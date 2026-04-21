@@ -39,11 +39,18 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
-    timeout: 5000ms
+  # Redis configuration for idempotency tracking and caching
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
 
 # Notification Service Settings
 notification:
@@ -61,8 +68,6 @@ notification:
   retry:
     max-attempts: 3
     delay-ms: 5000
-  idempotency:
-    ttl-hours: 24
 
 # Kafka Topics
 kafka:

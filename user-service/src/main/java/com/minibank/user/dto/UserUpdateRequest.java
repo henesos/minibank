@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO for user profile update request.
- *
+ * 
  * Only updatable fields are included.
  * Email and password updates require separate endpoints.
  */

@@ -1,5 +1,6 @@
 package com.minibank.transaction.dto;
 
+import com.minibank.transaction.entity.Transaction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,8 +9,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import com.minibank.transaction.entity.Transaction;
 
 /**
  * DTO for transaction response.

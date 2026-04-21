@@ -1,5 +1,7 @@
 package com.minibank.notification.dto;
 
+import com.minibank.notification.entity.Notification.NotificationStatus;
+import com.minibank.notification.entity.Notification.NotificationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,9 +9,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import com.minibank.notification.entity.Notification.NotificationStatus;
-import com.minibank.notification.entity.Notification.NotificationType;
 
 /**
  * Response DTO for notification data.

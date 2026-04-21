@@ -7,27 +7,15 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
- * Redis Configuration for Notification Service.
+ * Redis configuration for Notification Service.
  *
- * <p>Provides a {@link RedisTemplate} bean with {@link StringRedisSerializer}
- * for both keys and values, used primarily for idempotency tracking in
- * {@link com.minibank.notification.kafka.TransactionEventConsumer}.</p>
- *
- * <p>Redis connection is already configured via {@code spring.redis.*}
- * properties in application.yml.</p>
+ * Provides a RedisTemplate<String, String> bean used for:
+ * - Event idempotency tracking (SET NX EX) in TransactionEventConsumer
+ * - Distributed duplicate detection across service instances
  */
 @Configuration
 public class RedisConfig {
 
-    /**
-     * Creates a RedisTemplate with String serializers for keys and values.
-     *
-     * <p>String serialization is used because idempotency keys and values
-     * are simple strings (e.g., "notification:event:{eventId}" → "1").</p>
-     *
-     * @param connectionFactory the Redis connection factory (auto-configured by Spring Boot)
-     * @return configured RedisTemplate instance
-     */
     @Bean
     public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, String> template = new RedisTemplate<>();

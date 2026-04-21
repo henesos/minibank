@@ -21,11 +21,10 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /** Handles AccountServiceException. */
     @ExceptionHandler(AccountServiceException.class)
     public ResponseEntity<ErrorResponse> handleAccountServiceException(AccountServiceException ex) {
         log.warn("AccountServiceException: {} - {}", ex.getErrorCode(), ex.getMessage());
-
+        
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(ErrorResponse.builder()
@@ -37,7 +36,6 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
-    /** Handles validation exceptions. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
@@ -61,7 +59,6 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
-    /** Handles generic exceptions. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error: ", ex);
@@ -77,7 +74,6 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
-    /** Error response DTO. */
     @Data
     @Builder
     public static class ErrorResponse {

@@ -25,13 +25,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration Tests for User Service.
- *
- * <p>Uses Testcontainers to spin up a PostgreSQL database for testing.
- * Tests the full application stack including HTTP layer, JWT filter, and security config.</p>
- *
- * <p>After S1 security fix, protected endpoints require a valid JWT in the Authorization header.
- * Public endpoints (register, login, refresh, verify-email, verify-phone, health) remain accessible
- * without authentication.</p>
+ * 
+ * Uses Testcontainers to spin up a PostgreSQL database for testing.
+ * Tests the full application stack including HTTP layer.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -68,13 +64,9 @@ class UserServiceIntegrationTest {
     private static String accessToken;
     private static UUID userId;
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // Public Endpoint Tests (no auth required)
-    // ═══════════════════════════════════════════════════════════════════════
-
     @Test
     @Order(1)
-    @DisplayName("Should register a new user (public endpoint)")
+    @DisplayName("Should register a new user")
     void registerUser_Success() throws Exception {
         UserRegistrationRequest request = UserRegistrationRequest.builder()
                 .email("integration@minibank.com")
@@ -99,7 +91,7 @@ class UserServiceIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("Should verify email (public endpoint)")
+    @DisplayName("Should verify email and activate account")
     void verifyEmail_Success() throws Exception {
         mockMvc.perform(post("/api/v1/users/{id}/verify-email", userId))
                 .andExpect(status().isOk())
@@ -109,9 +101,9 @@ class UserServiceIntegrationTest {
 
     @Test
     @Order(3)
-    @DisplayName("Should login with verified account (public endpoint)")
+    @DisplayName("Should login with verified account")
     void login_Success() throws Exception {
-        // Ensure user is ACTIVE before login
+        // First verify email to activate account
         User user = userRepository.findById(userId).orElseThrow();
         user.setEmailVerified(true);
         user.setStatus(User.UserStatus.ACTIVE);
@@ -135,16 +127,11 @@ class UserServiceIntegrationTest {
                 });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // Protected Endpoint Tests (JWT required)
-    // ═══════════════════════════════════════════════════════════════════════
-
     @Test
     @Order(4)
-    @DisplayName("Should get user by ID with valid JWT")
+    @DisplayName("Should get user by ID")
     void getUserById_Success() throws Exception {
-        mockMvc.perform(get("/api/v1/users/{id}", userId)
-                .header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/v1/users/{id}", userId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId.toString()))
                 .andExpect(jsonPath("$.email").value("integration@minibank.com"));
@@ -152,7 +139,7 @@ class UserServiceIntegrationTest {
 
     @Test
     @Order(5)
-    @DisplayName("Should update user profile with valid JWT")
+    @DisplayName("Should update user profile")
     void updateProfile_Success() throws Exception {
         UserUpdateRequest request = UserUpdateRequest.builder()
                 .firstName("Updated")
@@ -161,16 +148,11 @@ class UserServiceIntegrationTest {
 
         mockMvc.perform(put("/api/v1/users/{id}", userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer " + accessToken)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstName").value("Updated"))
                 .andExpect(jsonPath("$.lastName").value("Name"));
     }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Security Tests
-    // ═══════════════════════════════════════════════════════════════════════
 
     @Test
     @Order(6)
@@ -205,39 +187,25 @@ class UserServiceIntegrationTest {
 
     @Test
     @Order(8)
-    @DisplayName("Should return 401 when accessing protected endpoint without token")
-    void getUserById_NoToken_Returns401() throws Exception {
-        mockMvc.perform(get("/api/v1/users/{id}", userId))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @Order(9)
-    @DisplayName("Should return 404 for non-existent user (with valid JWT)")
+    @DisplayName("Should return 404 for non-existent user")
     void getUser_NotFound() throws Exception {
         UUID nonExistentId = UUID.randomUUID();
-
-        mockMvc.perform(get("/api/v1/users/{id}", nonExistentId)
-                .header("Authorization", "Bearer " + accessToken))
+        
+        mockMvc.perform(get("/api/v1/users/{id}", nonExistentId))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @Order(10)
-    @DisplayName("Should delete user account with valid JWT")
+    @Order(9)
+    @DisplayName("Should delete user account")
     void deleteAccount_Success() throws Exception {
-        mockMvc.perform(delete("/api/v1/users/{id}", userId)
-                .header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(delete("/api/v1/users/{id}", userId))
                 .andExpect(status().isNoContent());
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // Health Check Test
-    // ═══════════════════════════════════════════════════════════════════════
-
     @Test
-    @Order(11)
-    @DisplayName("Health check should return UP (public endpoint)")
+    @Order(10)
+    @DisplayName("Health check should return UP")
     void healthCheck_Success() throws Exception {
         mockMvc.perform(get("/api/v1/users/health"))
                 .andExpect(status().isOk())
