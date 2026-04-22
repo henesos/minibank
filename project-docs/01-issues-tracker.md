@@ -1,7 +1,7 @@
 # MiniBank — Sorun Takip Dokumani
 
 > **Son Guncelleme:** 22 Nisan 2026
-> **Durum:** Faz 0 Degerlendirmesi
+> **Durum:** Sprint 7 — Security & Hardening Devam Ediyor
 
 ---
 
@@ -13,7 +13,7 @@
 | C2 | Authorization yok — isAccountOwner cagrilmiyor | account-service AccountController.java | Herkes her hesaba erisir | Bekliyor |
 | C3 | Zayif account number uretimi | account-service AccountService.java:316 | Collision + predictability | Bekliyor |
 | C4 | Hardcoded JWT secret | api-gateway application.yml:38 | Secret exposure | Bekliyor |
-| C5 | ConcurrentHashMap idempotency | notification-service TransactionEventConsumer | Restart'ta kayip, multi-inst | Bekliyor |
+| C5 | ConcurrentHashMap idempotency | notification-service TransactionEventConsumer | Restart'ta kayip, multi-inst | ✅ Cozuldu (Gorev 2-b) |
 
 ---
 
