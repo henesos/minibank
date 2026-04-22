@@ -2,7 +2,6 @@ package com.minibank.notification.kafka;
 
 import com.minibank.notification.dto.NotificationResponse;
 import com.minibank.notification.dto.TransactionEvent;
-import com.minibank.notification.repository.NotificationRepository;
 import com.minibank.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +13,7 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Kafka consumer for transaction events.
@@ -22,20 +21,9 @@ import java.time.Duration;
  * Listens to transaction events from transaction-service and
  * creates notifications for affected users (both sender and receiver).
  *
- * <p><b>Idempotency strategy (ADR-013):</b></p>
- * <ol>
- *   <li>Redis SET NX EX — atomic check-and-set with 24h TTL</li>
- *   <li>Redis miss → DB double-check via idempotencyKey (fallback if Redis lost data)</li>
- *   <li>Exception → Redis key cleanup (rollback so the event can be retried)</li>
- * </ol>
- *
- * <p>This three-layer strategy ensures:</p>
- * <ul>
- *   <li>No duplicate notifications across restarts (DB persists)</li>
- *   <li>No duplicate notifications in multi-instance deployment (Redis is shared)</li>
- *   <li>No memory leak (Redis TTL auto-cleanup, unlike ConcurrentHashMap)</li>
- *   <li>At-least-once processing guarantee (Redis key rollback on failure)</li>
- * </ul>
+ * Idempotency is handled via Redis SET NX EX instead of an in-memory
+ * ConcurrentHashMap so that duplicate detection survives restarts and
+ * works correctly in a multi-instance deployment.
  */
 @Slf4j
 @Component
@@ -43,29 +31,18 @@ import java.time.Duration;
 public class TransactionEventConsumer {
 
     private final NotificationService notificationService;
-    private final NotificationRepository notificationRepository;
     private final RedisTemplate<String, String> redisTemplate;
 
     /** Redis key prefix for processed-event tracking */
     private static final String PROCESSED_KEY_PREFIX = "notification:processed:";
 
     /** TTL for idempotency keys — 24 hours */
-    private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+    private static final long IDEMPOTENCY_TTL_HOURS = 24;
 
     /**
      * Consumes transaction events and creates notifications.
      *
-     * <p>Idempotency flow:</p>
-     * <ol>
-     *   <li>Redis SET NX EX with 24h TTL — prevents duplicate processing</li>
-     *   <li>If Redis hit (key exists) → skip, log warning, acknowledge</li>
-     *   <li>If Redis miss → DB double-check via idempotencyKey</li>
-     *   <li>If DB hit → skip (event already processed before Redis was set)</li>
-     *   <li>If DB miss → process event, create notifications</li>
-     *   <li>If exception → rollback Redis key (delete) so event can be retried</li>
-     * </ol>
-     *
-     * @param event          the transaction event
+     * @param event the transaction event
      * @param acknowledgment manual acknowledgment for at-least-once delivery
      */
     @KafkaListener(
@@ -78,16 +55,16 @@ public class TransactionEventConsumer {
             @Header(KafkaHeaders.RECEIVED_KEY) String key,
             Acknowledgment acknowledgment) {
 
-        String eventId = event.getEventId().toString();
-        String redisKey = PROCESSED_KEY_PREFIX + eventId;
-
         log.info("Received transaction event: {}, type: {}",
-                eventId, event.getEventType());
+                event.getEventId(), event.getEventType());
 
         try {
-            // ── Step 1: Redis SET NX EX — atomic check-and-set ──
+            // Idempotency check via Redis SET NX EX
+            String eventId = event.getEventId().toString();
+            String redisKey = PROCESSED_KEY_PREFIX + eventId;
+
             Boolean wasSet = redisTemplate.opsForValue()
-                    .setIfAbsent(redisKey, "1", IDEMPOTENCY_TTL);
+                    .setIfAbsent(redisKey, "1", IDEMPOTENCY_TTL_HOURS, TimeUnit.HOURS);
 
             if (wasSet == null || !wasSet) {
                 log.warn("Duplicate event detected (Redis idempotency), skipping: {}", eventId);
@@ -95,15 +72,7 @@ public class TransactionEventConsumer {
                 return;
             }
 
-            // ── Step 2: DB double-check (fallback if Redis lost data) ──
-            boolean alreadyProcessedInDb = checkDbForProcessedEvent(event);
-            if (alreadyProcessedInDb) {
-                log.warn("Event already processed in DB (Redis miss fallback), skipping: {}", eventId);
-                acknowledgment.acknowledge();
-                return;
-            }
-
-            // ── Step 3: Process the event ──
+            // Process the event based on type
             processEvent(event);
 
             log.info("Successfully processed transaction event: {}", eventId);
@@ -111,48 +80,10 @@ public class TransactionEventConsumer {
         } catch (Exception e) {
             log.error("Error processing transaction event {}: {}",
                     event.getEventId(), e.getMessage(), e);
-
-            // ── Step 4: Rollback Redis key so the event can be retried ──
-            try {
-                redisTemplate.delete(redisKey);
-                log.info("Rolled back Redis idempotency key for retry: {}", eventId);
-            } catch (Exception redisEx) {
-                log.error("Failed to rollback Redis key {}: {}", eventId, redisEx.getMessage());
-            }
             // In production, send to dead-letter queue
         } finally {
             acknowledgment.acknowledge();
         }
-    }
-
-    /**
-     * Checks if the event has already been processed by querying the database
-     * using idempotency keys.
-     *
-     * <p>This is a safety net for the case where Redis loses the idempotency key
-     * (restart, eviction, flush) but the notification was already created in DB.
-     * The idempotency keys used in {@link NotificationService#createFromTransactionEvent}
-     * are: {@code tx-{eventId}-sender} and {@code tx-{eventId}-receiver}.</p>
-     *
-     * @param event the transaction event to check
-     * @return true if any notification for this event already exists in DB
-     */
-    private boolean checkDbForProcessedEvent(TransactionEvent event) {
-        String senderKey = "tx-" + event.getEventId() + "-sender";
-        if (notificationRepository.existsByIdempotencyKey(senderKey)) {
-            log.debug("DB double-check hit: sender notification exists for event: {}",
-                    event.getEventId());
-            return true;
-        }
-
-        String receiverKey = "tx-" + event.getEventId() + "-receiver";
-        if (notificationRepository.existsByIdempotencyKey(receiverKey)) {
-            log.debug("DB double-check hit: receiver notification exists for event: {}",
-                    event.getEventId());
-            return true;
-        }
-
-        return false;
     }
 
     /**
@@ -189,7 +120,7 @@ public class TransactionEventConsumer {
         log.info("Created sender notification: {} for completed transaction", senderResponse.getId());
         notificationService.sendNotification(senderResponse.getId());
 
-        // Notify receiver (toUserId)
+        // Notify receiver (toUserId) — previously missing
         if (event.getToUserId() != null) {
             NotificationResponse receiverResponse = notificationService.createFromTransactionEvent(event, false);
             log.info("Created receiver notification: {} for completed transaction", receiverResponse.getId());
