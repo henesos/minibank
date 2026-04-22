@@ -19,10 +19,11 @@ jwt:
   refresh-expiration: 86400000
 
 # Internal Service Authentication — disabled for unit tests
+# Note: Secret must be >= 32 characters to pass @PostConstruct validation
 internal:
   auth:
     enabled: false
-    secret: dummy-secret-for-testing-only
+    secret: dummy-secret-for-testing-must-be-32-chars-min
 
 logging:
   level:
