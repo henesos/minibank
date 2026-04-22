@@ -31,6 +31,13 @@ services:
 jwt:
   secret: minibank-super-secret-key-for-development-only-min-256-bits
 
+# Internal Service Authentication — disabled for unit tests
+internal:
+  auth:
+    secret: minibank-internal-secret-key-for-development-min-256-bits
+    enabled: false
+    token-ttl: 300000
+
 # Actuator endpoints
 management:
   endpoints:

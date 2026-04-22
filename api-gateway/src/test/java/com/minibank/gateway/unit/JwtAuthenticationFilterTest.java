@@ -1,5 +1,6 @@
 package com.minibank.gateway.unit;
 
+import com.minibank.gateway.filter.InternalTokenGenerator;
 import com.minibank.gateway.filter.JwtAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,10 +29,21 @@ class JwtAuthenticationFilterTest {
 
     // Secret must be at least 256 bits (32 characters)
     private static final String TEST_JWT_SECRET = "minibank-super-secret-key-for-development-only-min-256-bits";
+    private static final String TEST_INTERNAL_SECRET = "minibank-internal-secret-key-for-development-min-256-bits";
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter();
+        InternalTokenGenerator tokenGenerator = new InternalTokenGenerator();
+        // Set the internalSecret field using reflection
+        try {
+            var secretField = InternalTokenGenerator.class.getDeclaredField("internalSecret");
+            secretField.setAccessible(true);
+            secretField.set(tokenGenerator, TEST_INTERNAL_SECRET);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        filter = new JwtAuthenticationFilter(tokenGenerator);
         // Set the jwtSecret field using reflection
         try {
             var field = JwtAuthenticationFilter.class.getDeclaredField("jwtSecret");
@@ -48,6 +60,28 @@ class JwtAuthenticationFilterTest {
         // Arrange
         MockServerHttpRequest request = MockServerHttpRequest
                 .get("/api/auth/login")
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        // Act
+        Mono<Void> result = filter.filter(exchange, chain);
+
+        // Assert
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(chain).filter(any());
+    }
+
+    @Test
+    @DisplayName("Should allow /api/v1/users/refresh endpoint without authentication")
+    void refreshEndpoint_shouldPassWithoutAuth() {
+        // Arrange
+        MockServerHttpRequest request = MockServerHttpRequest
+                .get("/api/v1/users/refresh")
                 .build();
 
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
@@ -211,5 +245,20 @@ class JwtAuthenticationFilterTest {
     void filterOrder_shouldBeHighPriority() {
         // The filter should have order -100 for high priority
         assert filter.getOrder() == -100;
+    }
+
+    @Test
+    @DisplayName("Filter should inject InternalTokenGenerator")
+    void filter_shouldHaveInternalTokenGenerator() {
+        // Verify that the filter has the internal token generator injected
+        try {
+            var field = JwtAuthenticationFilter.class.getDeclaredField("internalTokenGenerator");
+            field.setAccessible(true);
+            var generator = field.get(filter);
+            assert generator != null : "InternalTokenGenerator should be injected";
+            assert generator instanceof InternalTokenGenerator;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

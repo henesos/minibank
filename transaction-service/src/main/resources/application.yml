@@ -88,6 +88,13 @@ app:
     retry-delay-ms: 1000
     timeout-ms: 30000
 
+# Internal Service Authentication — HMAC-based inter-service auth
+internal:
+  auth:
+    secret: ${INTERNAL_AUTH_SECRET}
+    enabled: true
+    token-ttl: 300000  # 5 minutes in milliseconds
+
 # SpringDoc OpenAPI Configuration
 springdoc:
   api-docs:

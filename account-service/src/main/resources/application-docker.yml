@@ -71,6 +71,13 @@ app:
     min-balance: 0.00
     max-daily-transfer: 50000.00
 
+# Internal Service Authentication — HMAC-based inter-service auth
+internal:
+  auth:
+    secret: ${INTERNAL_AUTH_SECRET}
+    enabled: true
+    token-ttl: 300000  # 5 minutes in milliseconds
+
 # SpringDoc OpenAPI Configuration
 springdoc:
   api-docs:

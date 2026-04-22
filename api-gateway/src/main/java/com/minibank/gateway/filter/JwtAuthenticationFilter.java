@@ -24,11 +24,15 @@ import java.util.List;
 
 /**
  * JWT Authentication Filter for API Gateway
- * 
+ *
  * Validates JWT tokens on incoming requests and adds user information
- * to request headers for downstream services.
- * 
+ * to request headers for downstream services. Also generates an
+ * HMAC-based internal auth token for inter-service authentication.
+ *
  * Public endpoints (no authentication required):
+ * - /api/v1/users/login
+ * - /api/v1/users/register
+ * - /api/v1/users/refresh
  * - /api/auth/login
  * - /api/auth/register
  * - /actuator/**
@@ -42,10 +46,17 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    private final InternalTokenGenerator internalTokenGenerator;
+
+    public JwtAuthenticationFilter(InternalTokenGenerator internalTokenGenerator) {
+        this.internalTokenGenerator = internalTokenGenerator;
+    }
+
     // Public endpoints that don't require authentication
     private static final List<String> PUBLIC_ENDPOINTS = List.of(
             "/api/v1/users/login",      // Login endpoint
             "/api/v1/users/register",   // Register endpoint
+            "/api/v1/users/refresh",    // Token refresh endpoint
             "/api/auth/login",          // Legacy login
             "/api/auth/register",       // Legacy register
             "/actuator",
@@ -91,19 +102,23 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         try {
             // Validate and parse token
             Claims claims = validateToken(token);
-            
+
             // Extract user information
             String userId = claims.getSubject();
             String email = claims.get("email", String.class);
             String role = claims.get("role", String.class);
+            // username = email in MiniBank (login credential is email)
+            String username = email;
 
             log.debug("Token validated for user: {} (role: {})", email, role);
 
-            // Add user headers for downstream services
+            // Add user headers and internal auth token for downstream services
             ServerHttpRequest mutatedRequest = request.mutate()
                     .header("X-User-ID", userId)
                     .header("X-User-Email", email)
-                    .header("X-User-Role", role)
+                    .header("X-User-Role", role != null ? role : "USER")
+                    .header("X-User-Username", username)
+                    .header("X-Internal-Token", internalTokenGenerator.generateToken(path))
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
@@ -149,7 +164,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().add("Content-Type", "application/json");
-        
+
         String errorBody = String.format(
                 "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
                 status.value(),
@@ -157,7 +172,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 message,
                 exchange.getRequest().getPath().value()
         );
-        
+
         return exchange.getResponse()
                 .writeWith(Mono.just(exchange.getResponse()
                         .bufferFactory()

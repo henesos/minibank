@@ -38,9 +38,16 @@ services:
   notification-service:
     url: http://notification-service:8084
 
-# JWT Configuration — externalized for production security
+# JWT Configuration — secret MUST be provided via environment variable
 jwt:
-  secret: ${JWT_SECRET:minibank-dev-only-secret-key-not-for-production-min-256-bits-long}
+  secret: ${JWT_SECRET}
+
+# Internal Service Authentication — HMAC-based inter-service auth
+internal:
+  auth:
+    secret: ${INTERNAL_AUTH_SECRET}
+    enabled: true
+    token-ttl: 300000  # 5 minutes in milliseconds
 
 # Resilience4j Circuit Breaker Configuration
 resilience4j:

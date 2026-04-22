@@ -15,6 +15,13 @@ spring:
   kafka:
     bootstrap-servers: localhost:9093
 
+# Internal Service Authentication — disabled for unit tests
+internal:
+  auth:
+    secret: minibank-internal-secret-key-for-development-min-256-bits
+    enabled: false
+    token-ttl: 300000
+
 logging:
   level:
     com.minibank: DEBUG

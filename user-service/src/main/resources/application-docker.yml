@@ -40,9 +40,16 @@ spring:
           min-idle: 2
 
 jwt:
-  secret: ${JWT_SECRET:minibank-super-secret-key-for-development-only-min-256-bits}
+  secret: ${JWT_SECRET}
   expiration: 86400000
   refresh-expiration: 604800000
+
+# Internal Service Authentication — HMAC-based inter-service auth
+internal:
+  auth:
+    secret: ${INTERNAL_AUTH_SECRET}
+    enabled: true
+    token-ttl: 300000  # 5 minutes in milliseconds
 
 management:
   tracing:

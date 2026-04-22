@@ -38,13 +38,18 @@ spring:
           max-idle: 8
           min-idle: 2
 
-# JWT Configuration
+# JWT Configuration — secret MUST be provided via environment variable
 jwt:
-  # Security Fix: JWT secret must come from environment variable in production.
-  # Default value is for DEVELOPMENT ONLY — never use in production!
-  secret: ${JWT_SECRET:minibank-dev-only-secret-key-not-for-production-min-256-bits-long}
+  secret: ${JWT_SECRET}
   expiration: 86400000  # 24 hours in milliseconds
   refresh-expiration: 604800000  # 7 days in milliseconds
+
+# Internal Service Authentication — HMAC-based inter-service auth
+internal:
+  auth:
+    secret: ${INTERNAL_AUTH_SECRET}
+    enabled: true
+    token-ttl: 300000  # 5 minutes in milliseconds
 
 # Micrometer Tracing (Zipkin)
 management:
