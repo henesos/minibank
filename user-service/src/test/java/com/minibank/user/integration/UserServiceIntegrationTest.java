@@ -29,7 +29,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Uses Testcontainers to spin up a PostgreSQL database for testing.
  * Tests the full application stack including HTTP layer.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+    "JWT_SECRET=test-jwt-secret-key-for-integration-tests-minimum-256-bits",
+    "INTERNAL_AUTH_SECRET=test-internal-auth-secret-for-tests",
+    "spring.datasource.url=jdbc:tc:postgresql:15:///user_test_db",
+    "internal.auth.enabled=false"
+})
 @AutoConfigureMockMvc
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -93,7 +98,8 @@ class UserServiceIntegrationTest {
     @Order(2)
     @DisplayName("Should verify email and activate account")
     void verifyEmail_Success() throws Exception {
-        mockMvc.perform(post("/api/v1/users/{id}/verify-email", userId))
+        mockMvc.perform(post("/api/v1/users/{id}/verify-email", userId)
+                .header("X-User-ID", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.emailVerified").value(true))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
@@ -131,7 +137,8 @@ class UserServiceIntegrationTest {
     @Order(4)
     @DisplayName("Should get user by ID")
     void getUserById_Success() throws Exception {
-        mockMvc.perform(get("/api/v1/users/{id}", userId))
+        mockMvc.perform(get("/api/v1/users/{id}", userId)
+                .header("X-User-ID", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId.toString()))
                 .andExpect(jsonPath("$.email").value("integration@minibank.com"));
@@ -147,6 +154,7 @@ class UserServiceIntegrationTest {
                 .build();
 
         mockMvc.perform(put("/api/v1/users/{id}", userId)
+                .header("X-User-ID", userId.toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -191,7 +199,8 @@ class UserServiceIntegrationTest {
     void getUser_NotFound() throws Exception {
         UUID nonExistentId = UUID.randomUUID();
         
-        mockMvc.perform(get("/api/v1/users/{id}", nonExistentId))
+        mockMvc.perform(get("/api/v1/users/{id}", nonExistentId)
+                .header("X-User-ID", nonExistentId.toString()))
                 .andExpect(status().isNotFound());
     }
 
@@ -199,7 +208,8 @@ class UserServiceIntegrationTest {
     @Order(9)
     @DisplayName("Should delete user account")
     void deleteAccount_Success() throws Exception {
-        mockMvc.perform(delete("/api/v1/users/{id}", userId))
+        mockMvc.perform(delete("/api/v1/users/{id}", userId)
+                .header("X-User-ID", userId.toString()))
                 .andExpect(status().isNoContent());
     }
 
