@@ -18,6 +18,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 
 /**
@@ -98,7 +99,10 @@ public class InternalAuthFilter implements Filter {
             String expectedHmac = calculateHmac(data);
             String actualHmac = decoded.substring(colonIndex + 1);
 
-            return expectedHmac.equals(actualHmac);
+            return MessageDigest.isEqual(
+                    expectedHmac.getBytes(StandardCharsets.UTF_8),
+                    actualHmac.getBytes(StandardCharsets.UTF_8)
+            );
         } catch (Exception e) {
             log.error("Internal token validation error: {}", e.getMessage());
             return false;

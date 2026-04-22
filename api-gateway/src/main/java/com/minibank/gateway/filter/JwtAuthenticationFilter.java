@@ -33,8 +33,6 @@ import java.util.List;
  * - /api/v1/users/login
  * - /api/v1/users/register
  * - /api/v1/users/refresh
- * - /api/auth/login
- * - /api/auth/register
  * - /actuator/**
  * - /swagger-ui/**
  * - /v3/api-docs/**
@@ -57,8 +55,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/users/login",      // Login endpoint
             "/api/v1/users/register",   // Register endpoint
             "/api/v1/users/refresh",    // Token refresh endpoint
-            "/api/auth/login",          // Legacy login
-            "/api/auth/register",       // Legacy register
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs",

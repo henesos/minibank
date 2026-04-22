@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Configuration;
  * - /api/v1/transactions/** -> Transaction Service (8083)
  * - /api/v1/notifications/** -> Notification Service (8084)
  *
+ * Legacy /api/{resource}/** routes have been removed. All clients must use /api/v1/ paths.
+ *
  * Each route is protected with a Resilience4j circuit breaker that falls back
  * to the corresponding endpoint in FallbackRouterConfig when the downstream
  * service is unavailable.
@@ -71,47 +73,6 @@ public class RouteConfig {
                 .route("notification-service", r -> r
                         .path("/api/v1/notifications/**")
                         .filters(f -> f
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("notification-service")
-                                        .setFallbackUri("forward:/fallback/notification")))
-                        .uri(notificationServiceUrl))
-
-                // Legacy support - rewrite old paths to v1 (with circuit breaker)
-                .route("user-service-legacy", r -> r
-                        .path("/api/users/**")
-                        .filters(f -> f
-                                .rewritePath("/api/users/(?<segment>.*)", "/api/v1/users/${segment}")
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("user-service")
-                                        .setFallbackUri("forward:/fallback/user")))
-                        .uri(userServiceUrl))
-
-                .route("account-service-legacy", r -> r
-                        .path("/api/accounts/**")
-                        .filters(f -> f
-                                .rewritePath("/api/accounts/(?<segment>.*)", "/api/v1/accounts/${segment}")
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("account-service")
-                                        .setFallbackUri("forward:/fallback/account")))
-                        .uri(accountServiceUrl))
-
-                .route("transaction-service-legacy", r -> r
-                        .path("/api/transactions/**")
-                        .filters(f -> f
-                                .rewritePath("/api/transactions/(?<segment>.*)", "/api/v1/transactions/${segment}")
-                                .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
-                                .circuitBreaker(c -> c
-                                        .setName("transaction-service")
-                                        .setFallbackUri("forward:/fallback/transaction")))
-                        .uri(transactionServiceUrl))
-
-                .route("notification-service-legacy", r -> r
-                        .path("/api/notifications/**")
-                        .filters(f -> f
-                                .rewritePath("/api/notifications/(?<segment>.*)", "/api/v1/notifications/${segment}")
                                 .addRequestHeader("X-Gateway", "MiniBank-API-Gateway")
                                 .circuitBreaker(c -> c
                                         .setName("notification-service")

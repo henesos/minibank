@@ -261,4 +261,49 @@ class JwtAuthenticationFilterTest {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    @DisplayName("Should set X-User-Username header matching email claim from valid JWT")
+    void validJwt_shouldSetXUserUsernameHeader() {
+        // Arrange — build a valid JWT with email and role claims
+        String token = io.jsonwebtoken.Jwts.builder()
+                .subject("user-123")
+                .claim("email", "test@minibank.com")
+                .claim("role", "USER")
+                .issuedAt(new java.util.Date())
+                .expiration(new java.util.Date(System.currentTimeMillis() + 3600000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                        TEST_JWT_SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .compact();
+
+        MockServerHttpRequest request = MockServerHttpRequest
+                .get("/api/v1/users/profile")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        // Act
+        Mono<Void> result = filter.filter(exchange, chain);
+
+        // Assert — request should pass through
+        StepVerifier.create(result)
+                .verifyComplete();
+        verify(chain).filter(any());
+
+        // Verify X-User-Username header was added and equals the email claim
+        var modifiedRequest = exchange.getRequest().mutate().build();
+        // The filter mutates the request, so we need to capture it from the chain call
+        org.mockito.ArgumentCaptor<org.springframework.web.server.ServerWebExchange> exchangeCaptor =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.web.server.ServerWebExchange.class);
+        verify(chain).filter(exchangeCaptor.capture());
+
+        var capturedRequest = exchangeCaptor.getValue().getRequest();
+        String usernameHeader = capturedRequest.getHeaders().getFirst("X-User-Username");
+        assert usernameHeader != null : "X-User-Username header should be present";
+        assert "test@minibank.com".equals(usernameHeader) :
+                "X-User-Username should equal email claim, got: " + usernameHeader;
+    }
 }

@@ -18,6 +18,12 @@ jwt:
   expiration: 3600000
   refresh-expiration: 86400000
 
+# Internal Service Authentication — disabled for unit tests
+internal:
+  auth:
+    enabled: false
+    secret: dummy-secret-for-testing-only
+
 logging:
   level:
     com.minibank: DEBUG
