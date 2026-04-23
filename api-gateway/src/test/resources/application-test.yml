@@ -7,14 +7,25 @@ spring:
 
   cloud:
     gateway:
-      # Disable rate limiting and other filters for tests
-      default-filters: []
+      # Enable rate limiting for tests
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 10
+            redis-rate-limiter.burstCapacity: 10
+            key-resolver: "#{@ipKeyResolver}"
 
-  # Disable Redis for tests
+  # Redis configuration for tests — host will be set dynamically
   data:
     redis:
       host: localhost
       port: 6379
+
+  # Rate limiter configuration
+  rate-limiter:
+    enabled: true
+    requests-per-minute: 60
+    burst-capacity: 60
 
 # Service URLs (mock for tests)
 services:
@@ -47,6 +58,11 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: false
+  health:
+    redis:
+      enabled: false
 
 # Logging
 logging:

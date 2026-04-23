@@ -47,6 +47,34 @@ public class AccountService {
     private static final int MAX_ACCOUNT_NUMBER_RETRIES = 3;
 
     /**
+     * Generates a unique account number with collision retry.
+     * 
+     * @return unique account number
+     */
+    private String generateAccountNumber() {
+        for (int attempt = 0; attempt < MAX_ACCOUNT_NUMBER_RETRIES; attempt++) {
+            String accountNumber = AccountNumberGenerator.generateAccountNumber();
+
+            if (!accountRepository.findByAccountNumber(accountNumber).isPresent()) {
+                log.debug("Generated unique account number: {} (attempt {})", accountNumber, attempt + 1);
+                return accountNumber;
+            }
+
+            log.warn("Account number collision: {} (attempt {}), retrying...", accountNumber, attempt + 1);
+        }
+
+        log.error("Failed to generate unique account number after {} attempts", MAX_ACCOUNT_NUMBER_RETRIES);
+        throw new AccountServiceException(
+            "Failed to generate unique account number",
+            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+            "ACCOUNT_NUMBER_GENERATION_FAILED"
+        );
+    }
+    
+    /** Account number generator with Luhn checksum */
+    private final AccountNumberGenerator accountNumberGenerator = new AccountNumberGenerator();
+
+    /**
      * Creates a new account for a user.
      * 
      * @param request account creation request
@@ -57,7 +85,7 @@ public class AccountService {
         log.info("Creating {} account for user: {}", request.getAccountType(), request.getUserId());
 
         // Generate unique account number with SecureRandom + Luhn check digit
-        String accountNumber = generateAccountNumber();
+        String accountNumber = AccountNumberGenerator.generateAccountNumber();
 
         // Create account - ACTIVE by default for immediate use
         Account account = Account.builder()
@@ -336,100 +364,16 @@ public class AccountService {
         account.softDelete();
         accountRepository.save(account);
 
-        log.info("Account closed: {}", id);
-    }
-
-    /**
-     * Generates a unique account number using SecureRandom + Luhn check digit.
-     * 
-     * Format: MB + 10-digit SecureRandom number + 2-digit Luhn check digit
-     * Example: MB123456789078 (MB + 1234567890 + 78)
-     * 
-     * Includes collision retry mechanism (max 3 attempts).
-     * 
-     * @return unique account number
-     */
-    private String generateAccountNumber() {
-        for (int attempt = 0; attempt < MAX_ACCOUNT_NUMBER_RETRIES; attempt++) {
-            // Generate 10 cryptographically random digits
-            StringBuilder digits = new StringBuilder(10);
-            for (int i = 0; i < 10; i++) {
-                digits.append(SECURE_RANDOM.nextInt(10));
-            }
-
-            // Compute 2-digit Luhn check digit from "MB" + 10 digits
-            String baseNumber = "MB" + digits;
-            int checkDigit = computeLuhnCheckDigit(baseNumber);
-            String accountNumber = baseNumber + String.format("%02d", checkDigit);
-
-            // Check for collision
-            if (!accountRepository.findByAccountNumber(accountNumber).isPresent()) {
-                log.debug("Generated unique account number: {} (attempt {})", accountNumber, attempt + 1);
-                return accountNumber;
-            }
-
-            log.warn("Account number collision: {} (attempt {}), retrying...", accountNumber, attempt + 1);
-        }
-
-        // All retries exhausted — extremely unlikely with SecureRandom 10 digits
-        log.error("Failed to generate unique account number after {} attempts", MAX_ACCOUNT_NUMBER_RETRIES);
-        throw new AccountServiceException(
-            "Failed to generate unique account number",
-            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-            "ACCOUNT_NUMBER_GENERATION_FAILED"
-        );
-    }
-
-    /**
-     * Computes a 2-digit Luhn check digit for the given base string.
-     * 
-     * The Luhn algorithm is applied to the numeric characters of the input.
-     * Non-numeric characters (e.g., 'M', 'B') are converted to their
-     * Unicode code point modulo 10 to participate in the checksum.
-     * 
-     * @param base the base string (e.g., "MB1234567890")
-     * @return 2-digit check value (0-99)
-     */
-    private int computeLuhnCheckDigit(String base) {
-        // Extract digits: for non-numeric chars, use (codePoint % 10) as digit
-        int[] digits = new int[base.length()];
-        for (int i = 0; i < base.length(); i++) {
-            char c = base.charAt(i);
-            if (Character.isDigit(c)) {
-                digits[i] = c - '0';
-            } else {
-                // Map letters to digits: M=7 (77%10), B=6 (66%10)
-                digits[i] = c % 10;
-            }
-        }
-
-        // Standard Luhn algorithm — double every second digit from right
-        int sum = 0;
-        boolean doubleDigit = true; // Start with doubling the rightmost
-        for (int i = digits.length - 1; i >= 0; i--) {
-            int d = digits[i];
-            if (doubleDigit) {
-                d *= 2;
-                if (d > 9) {
-                    d -= 9;
-                }
-            }
-            sum += d;
-            doubleDigit = !doubleDigit;
-        }
-
-        // Return 2-digit check: (100 - (sum % 100)) % 100
-        // This ensures the check digit is in range 0-99
-        return (100 - (sum % 100)) % 100;
+log.info("Account closed: {}", id);
     }
 
     /**
      * Checks if an account belongs to a user.
-     * 
-     * @param accountId account ID
-     * @param userId user ID
-     * @return true if account belongs to user
-     */
+      * 
+      * @param accountId account ID
+      * @param userId user ID
+      * @return true if account belongs to user
+      */
     @Transactional(readOnly = true)
     public boolean isAccountOwner(UUID accountId, UUID userId) {
         return accountRepository.existsByIdAndUserId(accountId, userId);

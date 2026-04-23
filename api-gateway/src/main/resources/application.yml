@@ -7,13 +7,19 @@ spring:
 
   cloud:
     gateway:
-      # Rate limiting enabled — 100 requests/minute per IP
+      # Rate limiting enabled — 60 requests/minute per IP
       default-filters:
         - name: RequestRateLimiter
           args:
-            redis-rate-limiter.replenishRate: 100
-            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.replenishRate: 1
+            redis-rate-limiter.burstCapacity: 100
             key-resolver: "#{@ipKeyResolver}"
+
+  # Rate limiter configuration
+  rate-limiter:
+    enabled: true
+    requests-per-minute: 60
+    burst-capacity: 100
 
   # Redis configuration for rate limiting
   data:
@@ -49,6 +55,7 @@ resilience4j:
   circuitbreaker:
     configs:
       default:
+        registerHealthIndicator: true
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 30s

@@ -74,6 +74,7 @@ kafka:
   topics:
     transaction-events: transaction-events
     notification-events: notification-events
+    notification-events-dlq: notification-events-dlq
 
 # Actuator
 management:

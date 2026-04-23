@@ -2,8 +2,10 @@ package com.minibank.user.service;
 
 import com.minibank.user.dto.*;
 import com.minibank.user.entity.User;
+import com.minibank.user.entity.VerificationToken;
 import com.minibank.user.exception.*;
 import com.minibank.user.repository.UserRepository;
+import com.minibank.user.repository.VerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -32,9 +34,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
+private final UserRepository userRepository;
+    private final VerificationTokenRepository verificationTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final VerificationTokenService verificationTokenService;
 
     private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
     private static final int ACCOUNT_LOCK_DURATION_MINUTES = 30;
@@ -265,23 +269,29 @@ public class UserService {
         log.info("User account soft deleted: {}", id);
     }
 
-    /**
-     * Verifies a user's email.
-     * 
+/**
+     * Verifies a user's email with verification code.
+     *
      * @param id user ID
+     * @param code verification code
+     * @return updated user response
      * @throws UserNotFoundException if user not found
      */
     @Transactional
     @CachePut(value = "users", key = "#id")
-    public UserResponse verifyEmail(UUID id) {
+    public UserResponse verifyEmail(UUID id, String code) {
         log.info("Verifying email for user: {}", id);
+
+        VerificationToken token = verificationTokenService.validateToken(id, code, VerificationToken.TokenType.EMAIL);
 
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
 
+        token.markUsed();
+        verificationTokenRepository.save(token);
+
         user.setEmailVerified(true);
-        
-        // Activate account if phone is also verified or not required
+
         if (user.getPhone() == null || user.getPhoneVerified()) {
             user.setStatus(User.UserStatus.ACTIVE);
         }
@@ -293,22 +303,28 @@ public class UserService {
     }
 
     /**
-     * Verifies a user's phone.
-     * 
+     * Verifies a user's phone with verification code.
+     *
      * @param id user ID
+     * @param code verification code
+     * @return updated user response
      * @throws UserNotFoundException if user not found
      */
     @Transactional
     @CachePut(value = "users", key = "#id")
-    public UserResponse verifyPhone(UUID id) {
+    public UserResponse verifyPhone(UUID id, String code) {
         log.info("Verifying phone for user: {}", id);
+
+        VerificationToken token = verificationTokenService.validateToken(id, code, VerificationToken.TokenType.PHONE);
 
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
 
+        token.markUsed();
+        verificationTokenRepository.save(token);
+
         user.setPhoneVerified(true);
-        
-        // Activate account if email is also verified
+
         if (user.getEmailVerified()) {
             user.setStatus(User.UserStatus.ACTIVE);
         }
@@ -317,6 +333,38 @@ public class UserService {
         log.info("Phone verified for user: {}", id);
 
         return UserResponse.fromEntity(user);
+    }
+
+    /**
+     * Requests email verification code.
+     *
+     * @param id user ID
+     * @return verification token response
+     */
+    @Transactional
+    public void requestEmailVerification(UUID id) {
+        log.info("Requesting email verification for user: {}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+
+        verificationTokenService.createToken(id, VerificationToken.TokenType.EMAIL);
+    }
+
+    /**
+     * Requests phone verification code.
+     *
+     * @param id user ID
+     * @return verification token response
+     */
+    @Transactional
+    public void requestPhoneVerification(UUID id) {
+        log.info("Requesting phone verification for user: {}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+
+        verificationTokenService.createToken(id, VerificationToken.TokenType.PHONE);
     }
 
     /**

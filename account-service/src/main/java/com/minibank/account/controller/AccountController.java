@@ -82,32 +82,41 @@ public class AccountController {
      */
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getAccountById(
-            @PathVariable UUID id,
-            HttpServletRequest request) {
-        String userId = getAuthenticatedUserId(request);
-        log.debug("Get account request: {} by user: {}", id, userId);
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+        validateAccountOwnership(id, request);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
-        
-        return ResponseEntity.ok(AccountResponse.fromEntity(account));
+        AccountResponse response = accountService.getAccountById(id);
+        log.debug("Get account request: {} by user: {}", id, getAuthenticatedUserId(request));
+        return ResponseEntity.ok(response);
     }
 
     /**
      * Get account by account number — restricted to account owner only.
      * Prevents enumeration of other users' accounts by account number.
+     * Only returns ID — no balance or sensitive info.
      */
     @GetMapping("/number/{accountNumber}")
-    public ResponseEntity<AccountResponse> getAccountByNumber(
-            @PathVariable String accountNumber,
-            HttpServletRequest request) {
+    public ResponseEntity<AccountIdResponse> getAccountByNumber(
+            HttpServletRequest request,
+            @PathVariable String accountNumber) {
         String userId = getAuthenticatedUserId(request);
         log.debug("Get account by number: {} by user: {}", accountNumber, userId);
         
         Account account = accountService.findAccountByNumber(accountNumber);
-        validateAccountOwnership(account, userId);
+        if (!account.getUserId().toString().equals(userId)) {
+            log.warn("IDOR attempt: user {} tried to access account {} owned by user {}",
+                    userId, account.getId(), account.getUserId());
+            throw new AccountServiceException(
+                "You do not have permission to access this account",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
-        return ResponseEntity.ok(AccountResponse.fromEntity(account));
+        return ResponseEntity.ok(AccountIdResponse.builder()
+                .accountId(account.getId())
+                .build());
     }
 
     /**
@@ -116,8 +125,8 @@ public class AccountController {
      */
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<AccountResponse>> getAccountsByUserId(
-            @PathVariable UUID userId,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @PathVariable UUID userId) {
         String authenticatedUserId = getAuthenticatedUserId(request);
         
         // IDOR check: authenticated user can only query their own accounts
@@ -140,13 +149,19 @@ public class AccountController {
      */
     @GetMapping("/{id}/balance")
     public ResponseEntity<BalanceResponse> getBalance(
-            @PathVariable UUID id,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @PathVariable UUID id) {
         String userId = getAuthenticatedUserId(request);
         log.debug("Get balance for account: {} by user: {}", id, userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to access balance of account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         BigDecimal balance = accountService.getBalance(id);
         BigDecimal availableBalance = accountService.getAvailableBalance(id);
@@ -162,14 +177,20 @@ public class AccountController {
      */
     @PostMapping("/{id}/deposit")
     public ResponseEntity<AccountResponse> deposit(
+            HttpServletRequest httpRequest,
             @PathVariable UUID id,
-            @Valid @RequestBody BalanceUpdateRequest request,
-            HttpServletRequest httpRequest) {
+            @Valid @RequestBody BalanceUpdateRequest request) {
         String userId = getAuthenticatedUserId(httpRequest);
         log.info("Deposit request for account: {}, amount: {} by user: {}", id, request.getAmount(), userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to deposit to account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         AccountResponse response = accountService.deposit(id, request);
         return ResponseEntity.ok(response);
@@ -180,14 +201,20 @@ public class AccountController {
      */
     @PostMapping("/{id}/withdraw")
     public ResponseEntity<AccountResponse> withdraw(
+            HttpServletRequest httpRequest,
             @PathVariable UUID id,
-            @Valid @RequestBody BalanceUpdateRequest request,
-            HttpServletRequest httpRequest) {
+            @Valid @RequestBody BalanceUpdateRequest request) {
         String userId = getAuthenticatedUserId(httpRequest);
         log.info("Withdraw request for account: {}, amount: {} by user: {}", id, request.getAmount(), userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to withdraw from account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         AccountResponse response = accountService.withdraw(id, request);
         return ResponseEntity.ok(response);
@@ -198,13 +225,19 @@ public class AccountController {
      */
     @PostMapping("/{id}/activate")
     public ResponseEntity<AccountResponse> activateAccount(
-            @PathVariable UUID id,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @PathVariable UUID id) {
         String userId = getAuthenticatedUserId(request);
         log.info("Activate account request: {} by user: {}", id, userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to activate account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         AccountResponse response = accountService.activateAccount(id);
         return ResponseEntity.ok(response);
@@ -215,13 +248,19 @@ public class AccountController {
      */
     @PostMapping("/{id}/suspend")
     public ResponseEntity<AccountResponse> suspendAccount(
-            @PathVariable UUID id,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @PathVariable UUID id) {
         String userId = getAuthenticatedUserId(request);
         log.info("Suspend account request: {} by user: {}", id, userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to suspend account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         AccountResponse response = accountService.suspendAccount(id);
         return ResponseEntity.ok(response);
@@ -232,13 +271,19 @@ public class AccountController {
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> closeAccount(
-            @PathVariable UUID id,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @PathVariable UUID id) {
         String userId = getAuthenticatedUserId(request);
         log.info("Close account request: {} by user: {}", id, userId);
         
-        Account account = accountService.findAccountById(id);
-        validateAccountOwnership(account, userId);
+        if (!accountService.isAccountOwner(id, UUID.fromString(userId))) {
+            log.warn("IDOR attempt: user {} tried to close account {}", userId, id);
+            throw new AccountServiceException(
+                "Access denied",
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED"
+            );
+        }
         
         accountService.closeAccount(id);
         return ResponseEntity.noContent().build();
@@ -268,12 +313,23 @@ public class AccountController {
     private String getAuthenticatedUserId(HttpServletRequest request) {
         String userIdHeader = request.getHeader("X-User-ID");
         
-        if (userIdHeader == null || userIdHeader.isEmpty()) {
+        if (userIdHeader == null || userIdHeader.trim().isEmpty()) {
             log.warn("X-User-ID header missing — unauthorized access attempt");
             throw new AccountServiceException(
-                "Authentication required: X-User-ID header missing",
+                "Missing X-User-ID header",
                 HttpStatus.UNAUTHORIZED,
-                "UNAUTHORIZED"
+                "MISSING_USER_ID"
+            );
+        }
+        
+        try {
+            UUID.fromString(userIdHeader);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid X-User-ID header format: {}", userIdHeader);
+            throw new AccountServiceException(
+                "Invalid X-User-ID header format",
+                HttpStatus.UNAUTHORIZED,
+                "INVALID_USER_ID"
             );
         }
         
@@ -281,19 +337,27 @@ public class AccountController {
     }
 
     /**
-     * Validates that the authenticated user is the owner of the account.
+     * Validates that the authenticated user is the owner of the account using isAccountOwner service method.
      * Prevents IDOR (Insecure Direct Object Reference) attacks.
      * 
-     * @param account the account to check ownership
-     * @param userId the authenticated user ID from X-User-ID header
+     * @param accountId the account ID to check ownership
+     * @param request HTTP request containing X-User-ID header
      * @throws AccountServiceException if user does not own the account (403 FORBIDDEN)
      */
-    private void validateAccountOwnership(Account account, String userId) {
-        if (!account.getUserId().toString().equals(userId)) {
-            log.warn("IDOR attempt: user {} tried to access account {} owned by user {}",
-                    userId, account.getId(), account.getUserId());
+    private void validateAccountOwnership(UUID accountId, HttpServletRequest request) {
+        String userIdHeader = request.getHeader("X-User-ID");
+        if (userIdHeader == null) {
             throw new AccountServiceException(
-                "You do not have permission to access this account",
+                "Authentication required: X-User-ID header missing",
+                HttpStatus.UNAUTHORIZED,
+                "UNAUTHORIZED"
+            );
+        }
+        UUID userId = UUID.fromString(userIdHeader);
+        if (!accountService.isAccountOwner(accountId, userId)) {
+            log.warn("IDOR attempt: user {} tried to access account {}", userId, accountId);
+            throw new AccountServiceException(
+                "Access denied",
                 HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED"
             );

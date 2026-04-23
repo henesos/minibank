@@ -72,8 +72,9 @@ services:
       context: .
       dockerfile: user-service/Dockerfile
     container_name: minibank-user-service
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
+    # Internal only - access via api-gateway
     env_file:
       - .env
     environment:
@@ -133,8 +134,9 @@ services:
       context: .
       dockerfile: account-service/Dockerfile
     container_name: minibank-account-service
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
+    # Internal only - access via api-gateway
     env_file:
       - .env
     environment:
@@ -196,8 +198,9 @@ services:
       context: .
       dockerfile: transaction-service/Dockerfile
     container_name: minibank-transaction-service
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
+    # Internal only - access via api-gateway
     env_file:
       - .env
     environment:
@@ -259,8 +262,9 @@ services:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: minibank-notification-service
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
+    # Internal only - access via api-gateway
     env_file:
       - .env
     environment:

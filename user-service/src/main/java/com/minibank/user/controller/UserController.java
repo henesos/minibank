@@ -160,11 +160,11 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
+/**
      * Verify user email.
-     * 
+     *
      * Security: IDOR Protection — X-User-ID header must match the requested {id}.
-     * 
+     *
      * @param id user ID (path variable)
      * @param request HTTP request (to read X-User-ID header)
      * @return updated user
@@ -172,19 +172,39 @@ public class UserController {
     @PostMapping("/{id}/verify-email")
     public ResponseEntity<UserResponse> verifyEmail(
             @PathVariable UUID id,
+            @RequestBody VerifyCodeRequest verifyCodeRequest,
             HttpServletRequest request) {
         // IDOR Fix: Verify authenticated user can only verify their own email
         validateUserIdMatch(id, request);
         log.info("Verify email request for user: {}", id);
-        UserResponse response = userService.verifyEmail(id);
+        UserResponse response = userService.verifyEmail(id, verifyCodeRequest.getCode());
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Verify user phone.
-     * 
+     * Request email verification code.
+     *
      * Security: IDOR Protection — X-User-ID header must match the requested {id}.
-     * 
+     *
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
+     * @return no content
+     */
+    @PostMapping("/{id}/request-email-verification")
+    public ResponseEntity<Void> requestEmailVerification(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        validateUserIdMatch(id, request);
+        log.info("Request email verification for user: {}", id);
+        userService.requestEmailVerification(id);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Verify user phone.
+     *
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     *
      * @param id user ID (path variable)
      * @param request HTTP request (to read X-User-ID header)
      * @return updated user
@@ -192,12 +212,32 @@ public class UserController {
     @PostMapping("/{id}/verify-phone")
     public ResponseEntity<UserResponse> verifyPhone(
             @PathVariable UUID id,
+            @RequestBody VerifyCodeRequest verifyCodeRequest,
             HttpServletRequest request) {
         // IDOR Fix: Verify authenticated user can only verify their own phone
         validateUserIdMatch(id, request);
         log.info("Verify phone request for user: {}", id);
-        UserResponse response = userService.verifyPhone(id);
+        UserResponse response = userService.verifyPhone(id, verifyCodeRequest.getCode());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Request phone verification code.
+     *
+     * Security: IDOR Protection — X-User-ID header must match the requested {id}.
+     *
+     * @param id user ID (path variable)
+     * @param request HTTP request (to read X-User-ID header)
+     * @return no content
+     */
+    @PostMapping("/{id}/request-phone-verification")
+    public ResponseEntity<Void> requestPhoneVerification(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        validateUserIdMatch(id, request);
+        log.info("Request phone verification for user: {}", id);
+        userService.requestPhoneVerification(id);
+        return ResponseEntity.ok().build();
     }
 
     /**
@@ -283,5 +323,13 @@ public class UserController {
     public static class HealthResponse {
         private String status;
         private String service;
+    }
+
+    /**
+     * DTO for verify code request.
+     */
+    @lombok.Data
+    public static class VerifyCodeRequest {
+        private String code;
     }
 }

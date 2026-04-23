@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,27 +74,26 @@ public class SagaCommandConsumer {
         log.info("Received saga command: type={}, sagaId={}, transactionId={}", 
                 eventType, sagaId, transactionId);
 
-        try {
-            switch (eventType) {
-                case DEBIT_REQUEST:
-                    handleDebitRequest(event);
-                    break;
-                case CREDIT_REQUEST:
-                    handleCreditRequest(event);
-                    break;
-                case COMPENSATE_DEBIT:
-                    handleCompensateDebit(event);
-                    break;
-                default:
-                    log.warn("Unknown event type: {}", eventType);
-            }
-        } catch (Exception e) {
-            log.error("Error processing saga command: {}", e.getMessage(), e);
+        switch (eventType) {
+            case DEBIT_REQUEST:
+                handleDebitRequest(event);
+                break;
+            case CREDIT_REQUEST:
+                handleCreditRequest(event);
+                break;
+            case COMPENSATE_DEBIT:
+                handleCompensateDebit(event);
+                break;
+            default:
+                log.warn("Unknown event type: {}", eventType);
         }
     }
 
     /**
      * Handles DEBIT_REQUEST - withdraw from source account.
+     * Note: Transaction is managed by consumeSagaCommand's @Transactional.
+     * Business exceptions (InsufficientBalance, AccountNotFound) are handled gracefully.
+     * Unexpected errors trigger rollback via RuntimeException.
      */
     private void handleDebitRequest(Map<String, Object> event) {
         UUID sagaId = parseUUID(event.get("sagaId"));
@@ -123,15 +123,23 @@ public class SagaCommandConsumer {
             publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
                     "Account not found: " + fromAccountId));
 
+        } catch (RuntimeException e) {
+            log.error("DEBIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
+            publishEventFailure(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
+                    "Unexpected error: " + e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("DEBIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
             publishEvent(createResponseEvent(sagaId, transactionId, DEBIT_FAILURE, fromAccountId, null, amount, 
                     "Unexpected error: " + e.getMessage()));
+            throw new RuntimeException("DEBIT_REQUEST failed: " + e.getMessage(), e);
         }
     }
 
     /**
      * Handles CREDIT_REQUEST - deposit to destination account.
+     * Note: Transaction is managed by consumeSagaCommand's @Transactional.
+     * AccountNotFound is handled gracefully. Unexpected errors trigger rollback.
      */
     private void handleCreditRequest(Map<String, Object> event) {
         UUID sagaId = parseUUID(event.get("sagaId"));
@@ -156,15 +164,23 @@ public class SagaCommandConsumer {
             publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
                     "Account not found: " + toAccountId));
 
+        } catch (RuntimeException e) {
+            log.error("CREDIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
+            publishEventFailure(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
+                    "Unexpected error: " + e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("CREDIT_FAILURE - Unexpected error: {}", e.getMessage(), e);
-            publishEvent(createResponseEvent(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
-                    "Unexpected error: " + e.getMessage()));
+            publishEventFailure(sagaId, transactionId, CREDIT_FAILURE, null, toAccountId, amount, 
+                    "Unexpected error: " + e.getMessage());
+            throw new RuntimeException("CREDIT_REQUEST failed: " + e.getMessage(), e);
         }
     }
 
     /**
      * Handles COMPENSATE_DEBIT - refund to source account (rollback).
+     * Note: Transaction is managed by consumeSagaCommand's @Transactional.
+     * Errors trigger rollback via RuntimeException.
      */
     private void handleCompensateDebit(Map<String, Object> event) {
         UUID sagaId = parseUUID(event.get("sagaId"));
@@ -184,20 +200,53 @@ public class SagaCommandConsumer {
             log.info("COMPENSATE_SUCCESS: account={}, amount={}", fromAccountId, amount);
             publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_SUCCESS, fromAccountId, null, amount, null));
 
+        } catch (RuntimeException e) {
+            log.error("COMPENSATE_FAILURE - Error: {}", e.getMessage(), e);
+            publishEventFailure(sagaId, transactionId, COMPENSATE_FAILURE, fromAccountId, null, amount, 
+                    "Compensation failed: " + e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("COMPENSATE_FAILURE - Error: {}", e.getMessage(), e);
-            publishEvent(createResponseEvent(sagaId, transactionId, COMPENSATE_FAILURE, fromAccountId, null, amount, 
-                    "Compensation failed: " + e.getMessage()));
+            publishEventFailure(sagaId, transactionId, COMPENSATE_FAILURE, fromAccountId, null, amount, 
+                    "Compensation failed: " + e.getMessage());
+            throw new RuntimeException("COMPENSATE_DEBIT failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Publishes a failure event to saga-events topic.
+     * Used when we need to publish failure response then throw to trigger rollback.
+     */
+    private void publishEventFailure(
+            UUID sagaId, UUID transactionId, String eventType,
+            UUID fromAccountId, UUID toAccountId, BigDecimal amount, String errorMessage) {
+        try {
+            Map<String, Object> event = createResponseEvent(
+                    sagaId, transactionId, eventType, fromAccountId, toAccountId, amount, errorMessage);
+            String key = sagaId.toString();
+            kafkaTemplate.send(SAGA_EVENTS_TOPIC, key, event);
+            kafkaTemplate.flush();
+            log.info("Published failure event: type={}, sagaId={}", eventType, key);
+        } catch (Exception e) {
+            log.error("Failed to publish failure event: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to publish failure event: " + e.getMessage(), e);
         }
     }
 
     /**
      * Publishes an event to saga-events topic.
+     * Throws RuntimeException on failure to trigger transaction rollback.
      */
     private void publishEvent(Map<String, Object> event) {
-        String key = event.get("sagaId").toString();
-        kafkaTemplate.send(SAGA_EVENTS_TOPIC, key, event);
-        log.info("Published event: type={}, sagaId={}", event.get("eventType"), key);
+        try {
+            String key = event.get("sagaId").toString();
+            kafkaTemplate.send(SAGA_EVENTS_TOPIC, key, event);
+            kafkaTemplate.flush();
+            log.info("Published event: type={}, sagaId={}", event.get("eventType"), key);
+        } catch (Exception e) {
+            log.error("Failed to publish event: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to publish event: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -246,31 +295,31 @@ public class SagaCommandConsumer {
      * @param scaleObj optional scale from the event (defaults to 4 for DECIMAL(19,4))
      * @return BigDecimal with proper scale
      */
+    private BigDecimal parseAmount(Object value) {
+        return parseAmount(value, null);
+    }
+
     private BigDecimal parseAmount(Object value, Object scaleObj) {
         if (value == null) return BigDecimal.ZERO;
-        
-        // If already BigDecimal, just apply scale
-        if (value instanceof BigDecimal) {
-            int scale = parseScale(scaleObj);
-            return ((BigDecimal) value).setScale(scale, java.math.RoundingMode.HALF_UP);
-        }
-        
-        // String-based conversion — preserves exact decimal representation
-        // This avoids the precision loss of doubleValue()
+
         int scale = parseScale(scaleObj);
-        BigDecimal result;
-        
-        if (value instanceof Number) {
-            // Convert Number via its string representation to avoid floating-point errors
-            // e.g., Double 99.99 → "99.99" → BigDecimal("99.99") (exact)
-            String stringValue = value.toString();
-            result = new BigDecimal(stringValue);
-        } else {
-            // Fallback: use string representation directly
-            result = new BigDecimal(value.toString());
+        String stringValue;
+
+        if (value instanceof BigDecimal) {
+            return ((BigDecimal) value).setScale(scale, RoundingMode.HALF_UP);
         }
-        
-        return result.setScale(scale, java.math.RoundingMode.HALF_UP);
+
+        if (value instanceof Number num) {
+            if (num instanceof Double || num instanceof Float) {
+                stringValue = new java.text.DecimalFormat("#.####################").format(num);
+            } else {
+                stringValue = num.toString();
+            }
+        } else {
+            stringValue = value.toString();
+        }
+
+        return new BigDecimal(stringValue).setScale(scale, RoundingMode.HALF_UP);
     }
 
     /**

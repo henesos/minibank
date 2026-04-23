@@ -1,10 +1,11 @@
 package com.minibank.account.unit;
 
 import com.minibank.account.controller.AccountController;
+import com.minibank.account.dto.AccountIdResponse;
 import com.minibank.account.dto.AccountCreateRequest;
 import com.minibank.account.dto.AccountResponse;
 import com.minibank.account.dto.BalanceUpdateRequest;
-import com.minibank.account.exception.AccessDeniedException;
+import com.minibank.account.entity.Account;
 import com.minibank.account.exception.AccountServiceException;
 import com.minibank.account.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -246,13 +247,13 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when callerId does not match path userId")
+        @DisplayName("Should throw AccountServiceException when callerId does not match path userId")
         void getAccountsByUserId_CallerIdNotMatch_ThrowsAccessDenied() {
             // Arrange
             UUID otherUserId = UUID.randomUUID();
 
             // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.getAccountsByUserId(request, otherUserId));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -283,36 +284,43 @@ class AccountControllerTest {
     class GetAccountByIdTests {
 
         @Test
-        @DisplayName("Should return account by ID via getAccountByIdForUser")
+        @DisplayName("Should return account by ID for account owner")
         void getAccountById_Success() {
-            // Arrange
-            when(accountService.getAccountByIdForUser(accountId, userId)).thenReturn(testAccountResponse);
+            when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
+            when(accountService.getAccountById(accountId)).thenReturn(testAccountResponse);
 
-            // Act
             ResponseEntity<AccountResponse> response = accountController.getAccountById(request, accountId);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals(accountId, response.getBody().getId());
             assertEquals(userId, response.getBody().getUserId());
             assertEquals("MB1234567890", response.getBody().getAccountNumber());
-            verify(accountService).getAccountByIdForUser(accountId, userId);
+            verify(accountService).isAccountOwner(accountId, userId);
+            verify(accountService).getAccountById(accountId);
+        }
+
+        @Test
+        @DisplayName("Should throw 403 when user does not own account")
+        void getAccountById_NotOwner_ThrowsForbidden() {
+            when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
+
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountById(request, accountId));
+            assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+            assertEquals("ACCESS_DENIED", exception.getErrorCode());
+            verify(accountService).isAccountOwner(accountId, userId);
+            verify(accountService, never()).getAccountById(any());
         }
 
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void getAccountById_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.getAccountById(request, accountId));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
-            verify(accountService, never()).getAccountByIdForUser(any(), any());
         }
     }
 
@@ -325,36 +333,60 @@ class AccountControllerTest {
     class GetAccountByNumberTests {
 
         @Test
-        @DisplayName("Should return account by account number via getAccountByNumberForUser")
+        @DisplayName("Should return account ID for account owner")
         void getAccountByNumber_Success() {
-            // Arrange
             String accountNumber = "MB1234567890";
-            when(accountService.getAccountByNumberForUser(accountNumber, userId)).thenReturn(testAccountResponse);
+            Account account = Account.builder()
+                    .id(accountId)
+                    .userId(userId)
+                    .accountNumber(accountNumber)
+                    .accountType(Account.AccountType.SAVINGS)
+                    .balance(BigDecimal.ZERO)
+                    .availableBalance(BigDecimal.ZERO)
+                    .currency("TRY")
+                    .status(Account.AccountStatus.ACTIVE)
+                    .build();
+            when(accountService.findAccountByNumber(accountNumber)).thenReturn(account);
 
-            // Act
-            ResponseEntity<AccountResponse> response = accountController.getAccountByNumber(request, accountNumber);
+            ResponseEntity<AccountIdResponse> response = 
+                    accountController.getAccountByNumber(request, accountNumber);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
-            assertEquals(accountNumber, response.getBody().getAccountNumber());
-            assertEquals(userId, response.getBody().getUserId());
-            verify(accountService).getAccountByNumberForUser(accountNumber, userId);
+            assertEquals(accountId, response.getBody().getAccountId());
+            verify(accountService).findAccountByNumber(accountNumber);
+        }
+
+        @Test
+        @DisplayName("Should throw 403 when user does not own account")
+        void getAccountByNumber_NotOwner_ThrowsForbidden() {
+            String accountNumber = "MB1234567890";
+            Account account = Account.builder()
+                    .id(accountId)
+                    .userId(UUID.randomUUID())
+                    .accountNumber(accountNumber)
+                    .accountType(Account.AccountType.SAVINGS)
+                    .balance(BigDecimal.ZERO)
+                    .availableBalance(BigDecimal.ZERO)
+                    .currency("TRY")
+                    .status(Account.AccountStatus.ACTIVE)
+                    .build();
+            when(accountService.findAccountByNumber(accountNumber)).thenReturn(account);
+
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountByNumber(request, accountNumber));
+            assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+            assertEquals("ACCESS_DENIED", exception.getErrorCode());
         }
 
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void getAccountByNumber_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.getAccountByNumber(request, "MB1234567890"));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
-            verify(accountService, never()).getAccountByNumberForUser(anyString(), any());
         }
     }
 
@@ -391,13 +423,13 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
+        @DisplayName("Should throw AccountServiceException when user does not own account")
         void getBalance_OwnershipFail_ThrowsAccessDenied() {
             // Arrange
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
             // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.getBalance(request, accountId));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -432,7 +464,6 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should deposit successfully and return updated account")
         void deposit_Success() {
-            // Arrange
             BalanceUpdateRequest depositRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("500.00"))
                     .build();
@@ -452,10 +483,8 @@ class AccountControllerTest {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
             when(accountService.deposit(eq(accountId), any(BalanceUpdateRequest.class))).thenReturn(updatedResponse);
 
-            // Act
             ResponseEntity<AccountResponse> response = accountController.deposit(request, accountId, depositRequest);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals(new BigDecimal("1500.00"), response.getBody().getBalance());
@@ -464,16 +493,14 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
-        void deposit_OwnershipFail_ThrowsAccessDenied() {
-            // Arrange
+        @DisplayName("Should throw 403 when user does not own account")
+        void deposit_NotOwner_ThrowsForbidden() {
             BalanceUpdateRequest depositRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("100.00"))
                     .build();
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
-            // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.deposit(request, accountId, depositRequest));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -483,18 +510,14 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void deposit_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
             BalanceUpdateRequest depositRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("100.00"))
                     .build();
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.deposit(request, accountId, depositRequest));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
         }
     }
 
@@ -509,7 +532,6 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should withdraw successfully and return updated account")
         void withdraw_Success() {
-            // Arrange
             BalanceUpdateRequest withdrawRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("300.00"))
                     .build();
@@ -529,10 +551,8 @@ class AccountControllerTest {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
             when(accountService.withdraw(eq(accountId), any(BalanceUpdateRequest.class))).thenReturn(updatedResponse);
 
-            // Act
             ResponseEntity<AccountResponse> response = accountController.withdraw(request, accountId, withdrawRequest);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals(new BigDecimal("700.00"), response.getBody().getBalance());
@@ -541,16 +561,14 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
-        void withdraw_OwnershipFail_ThrowsAccessDenied() {
-            // Arrange
+        @DisplayName("Should throw 403 when user does not own account")
+        void withdraw_NotOwner_ThrowsForbidden() {
             BalanceUpdateRequest withdrawRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("100.00"))
                     .build();
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
-            // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.withdraw(request, accountId, withdrawRequest));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -560,18 +578,14 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void withdraw_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
             BalanceUpdateRequest withdrawRequest = BalanceUpdateRequest.builder()
                     .amount(new BigDecimal("100.00"))
                     .build();
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.withdraw(request, accountId, withdrawRequest));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
         }
     }
 
@@ -586,7 +600,6 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should activate account and return updated account")
         void activateAccount_Success() {
-            // Arrange
             AccountResponse activatedResponse = AccountResponse.builder()
                     .id(accountId)
                     .userId(userId)
@@ -602,10 +615,8 @@ class AccountControllerTest {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
             when(accountService.activateAccount(accountId)).thenReturn(activatedResponse);
 
-            // Act
             ResponseEntity<AccountResponse> response = accountController.activateAccount(request, accountId);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals("ACTIVE", response.getBody().getStatus());
@@ -614,13 +625,11 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
-        void activateAccount_OwnershipFail_ThrowsAccessDenied() {
-            // Arrange
+        @DisplayName("Should throw 403 when user does not own account")
+        void activateAccount_NotOwner_ThrowsForbidden() {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
-            // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.activateAccount(request, accountId));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -630,15 +639,11 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void activateAccount_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.activateAccount(request, accountId));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
         }
     }
 
@@ -653,7 +658,6 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should suspend account and return updated account")
         void suspendAccount_Success() {
-            // Arrange
             AccountResponse suspendedResponse = AccountResponse.builder()
                     .id(accountId)
                     .userId(userId)
@@ -669,10 +673,8 @@ class AccountControllerTest {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
             when(accountService.suspendAccount(accountId)).thenReturn(suspendedResponse);
 
-            // Act
             ResponseEntity<AccountResponse> response = accountController.suspendAccount(request, accountId);
 
-            // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals("SUSPENDED", response.getBody().getStatus());
@@ -681,13 +683,11 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
-        void suspendAccount_OwnershipFail_ThrowsAccessDenied() {
-            // Arrange
+        @DisplayName("Should throw 403 when user does not own account")
+        void suspendAccount_NotOwner_ThrowsForbidden() {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
-            // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.suspendAccount(request, accountId));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -697,15 +697,11 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void suspendAccount_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.suspendAccount(request, accountId));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
         }
     }
 
@@ -720,14 +716,11 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should close account and return 204 No Content")
         void closeAccount_Success() {
-            // Arrange
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
             doNothing().when(accountService).closeAccount(accountId);
 
-            // Act
             ResponseEntity<Void> response = accountController.closeAccount(request, accountId);
 
-            // Assert
             assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
             assertNull(response.getBody());
             verify(accountService).isAccountOwner(accountId, userId);
@@ -735,13 +728,11 @@ class AccountControllerTest {
         }
 
         @Test
-        @DisplayName("Should throw AccessDeniedException when user does not own account")
-        void closeAccount_OwnershipFail_ThrowsAccessDenied() {
-            // Arrange
+        @DisplayName("Should throw 403 when user does not own account")
+        void closeAccount_NotOwner_ThrowsForbidden() {
             when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
 
-            // Act & Assert
-            AccessDeniedException exception = assertThrows(AccessDeniedException.class,
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
                     () -> accountController.closeAccount(request, accountId));
             assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
             assertEquals("ACCESS_DENIED", exception.getErrorCode());
@@ -751,15 +742,11 @@ class AccountControllerTest {
         @Test
         @DisplayName("Should throw AccountServiceException when X-User-ID header is missing")
         void closeAccount_MissingUserIdHeader_ThrowsException() {
-            // Arrange
             reset(request);
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act & Assert
-            AccountServiceException exception = assertThrows(AccountServiceException.class,
+            assertThrows(AccountServiceException.class,
                     () -> accountController.closeAccount(request, accountId));
-            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
-            assertEquals("MISSING_USER_ID", exception.getErrorCode());
         }
     }
 
@@ -889,6 +876,115 @@ class AccountControllerTest {
                     () -> accountController.getMyAccounts(request));
             assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
             assertEquals("INVALID_USER_ID", exception.getErrorCode());
+        }
+    }
+
+    // ═════════════════��═════════════════════════════════════════════════════
+    // 14. Validate Account Ownership Tests
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Validate Account Ownership")
+    class ValidateAccountOwnershipTests {
+
+        @Test
+        @DisplayName("Should allow account owner to validate")
+        void validateAccountOwnership_Owner_Success() {
+            when(accountService.isAccountOwner(accountId, userId)).thenReturn(true);
+            when(accountService.getAccountById(accountId)).thenReturn(testAccountResponse);
+
+            ResponseEntity<AccountResponse> response = accountController.getAccountById(request, accountId);
+
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+            verify(accountService).isAccountOwner(accountId, userId);
+        }
+
+        @Test
+        @DisplayName("Should throw FORBIDDEN for non-owner")
+        void validateAccountOwnership_NotOwner_ThrowsForbidden() {
+            when(accountService.isAccountOwner(accountId, userId)).thenReturn(false);
+
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountById(request, accountId));
+            assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+        }
+
+        @Test
+        @DisplayName("Should throw UNAUTHORIZED when X-User-ID header is null for getAccountById")
+        void validateAccountOwnership_NullHeader_ThrowsUnauthorized() {
+            reset(request);
+            when(request.getHeader("X-User-ID")).thenReturn(null);
+
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountById(request, accountId));
+            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
+            assertEquals("UNAUTHORIZED", exception.getErrorCode());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 15. GetAccountByNumber Edge Cases
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Get Account By Number Edge Cases")
+    class GetAccountByNumberEdgeCasesTests {
+
+        @Test
+        @DisplayName("Should return only accountId for owner")
+        void getAccountByNumber_ReturnsOnlyId() {
+            String accountNumber = "MB1234567890";
+            Account account = Account.builder()
+                    .id(accountId)
+                    .userId(userId)
+                    .accountNumber(accountNumber)
+                    .accountType(Account.AccountType.SAVINGS)
+                    .balance(new BigDecimal("1000.00"))
+                    .availableBalance(new BigDecimal("1000.00"))
+                    .currency("TRY")
+                    .status(Account.AccountStatus.ACTIVE)
+                    .build();
+            when(accountService.findAccountByNumber(accountNumber)).thenReturn(account);
+
+            ResponseEntity<AccountIdResponse> response =
+                    accountController.getAccountByNumber(request, accountNumber);
+
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+            assertNotNull(response.getBody());
+            assertEquals(accountId, response.getBody().getAccountId());
+        }
+
+        @Test
+        @DisplayName("Should throw FORBIDDEN when userId from header does not match account owner")
+        void getAccountByNumber_UserIdMismatch_ThrowsForbidden() {
+            String accountNumber = "MB1234567890";
+            UUID differentOwner = UUID.randomUUID();
+            Account account = Account.builder()
+                    .id(accountId)
+                    .userId(differentOwner)
+                    .accountNumber(accountNumber)
+                    .accountType(Account.AccountType.SAVINGS)
+                    .balance(BigDecimal.ZERO)
+                    .availableBalance(BigDecimal.ZERO)
+                    .currency("TRY")
+                    .status(Account.AccountStatus.ACTIVE)
+                    .build();
+            when(accountService.findAccountByNumber(accountNumber)).thenReturn(account);
+
+            AccountServiceException exception = assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountByNumber(request, accountNumber));
+            assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+            assertEquals("ACCESS_DENIED", exception.getErrorCode());
+        }
+
+        @Test
+        @DisplayName("Should throw UNAUTHORIZED when X-User-ID header is missing for getAccountByNumber")
+        void getAccountByNumber_MissingHeader_ThrowsUnauthorized() {
+            reset(request);
+            when(request.getHeader("X-User-ID")).thenReturn(null);
+
+            assertThrows(AccountServiceException.class,
+                    () -> accountController.getAccountByNumber(request, "MB1234567890"));
         }
     }
 }

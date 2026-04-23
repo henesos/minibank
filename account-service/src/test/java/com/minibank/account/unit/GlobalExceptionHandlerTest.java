@@ -390,5 +390,78 @@ class GlobalExceptionHandlerTest {
             assertNotEquals("SENSITIVE DATABASE CREDENTIAL LEAKED", response.getBody().getMessage());
             assertEquals("An unexpected error occurred", response.getBody().getMessage());
         }
+
+        @Test
+        @DisplayName("Should log error with full stack trace")
+        void shouldLogErrorWithStackTrace() {
+            // Arrange
+            Exception ex = new IllegalStateException("Database connection lost");
+
+            // Act
+            ResponseEntity<GlobalExceptionHandler.ErrorResponse> response =
+                    handler.handleGenericException(ex);
+
+            // Assert
+            assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+            assertNotNull(response.getBody());
+            assertEquals("INTERNAL_ERROR", response.getBody().getErrorCode());
+        }
+
+        @Test
+        @DisplayName("Should return timestamp in response body")
+        void shouldReturnTimestampInBody() {
+            // Arrange
+            Exception ex = new RuntimeException("Error");
+
+            // Act
+            ResponseEntity<GlobalExceptionHandler.ErrorResponse> response =
+                    handler.handleGenericException(ex);
+
+            // Assert
+            assertNotNull(response.getBody());
+            assertNotNull(response.getBody().getTimestamp());
+        }
+    }
+
+    @Nested
+    @DisplayName("ErrorResponse Inner Class")
+    class ErrorResponseTests {
+
+        @Test
+        @DisplayName("Should build ErrorResponse with all fields")
+        void shouldBuildWithAllFields() {
+            // Arrange
+            com.minibank.account.exception.GlobalExceptionHandler.ErrorResponse response =
+                    com.minibank.account.exception.GlobalExceptionHandler.ErrorResponse.builder()
+                    .timestamp(java.time.LocalDateTime.now())
+                    .status(404)
+                    .error("Not Found")
+                    .errorCode("NOT_FOUND")
+                    .message("Resource not found")
+                    .build();
+
+            // Assert
+            assertNotNull(response);
+            assertEquals(404, response.getStatus());
+            assertEquals("Not Found", response.getError());
+            assertEquals("NOT_FOUND", response.getErrorCode());
+            assertEquals("Resource not found", response.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should handle null errors map")
+        void shouldHandleNullErrorsMap() {
+            // Arrange
+            com.minibank.account.exception.GlobalExceptionHandler.ErrorResponse response =
+                    com.minibank.account.exception.GlobalExceptionHandler.ErrorResponse.builder()
+                    .status(400)
+                    .errorCode("VALIDATION_ERROR")
+                    .message("Validation failed")
+                    .build();
+
+            // Assert
+            assertNotNull(response);
+            assertNull(response.getErrors());
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.minibank.transaction.outbox.OutboxRepository;
 import com.minibank.transaction.repository.TransactionRepository;
 import com.minibank.transaction.saga.SagaEvent;
 import com.minibank.transaction.saga.SagaOrchestrator;
+import com.minibank.transaction.service.TransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,10 +16,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,6 +41,9 @@ class SagaOrchestratorTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private TransactionService transactionService;
 
     @InjectMocks
     private SagaOrchestrator sagaOrchestrator;
@@ -60,6 +66,8 @@ class SagaOrchestratorTest {
                 .currency("TRY")
                 .status(Transaction.TransactionStatus.PENDING)
                 .build();
+
+        ReflectionTestUtils.setField(sagaOrchestrator, "transactionService", transactionService);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -236,6 +244,100 @@ class SagaOrchestratorTest {
                 tx.getStatus() == Transaction.TransactionStatus.FAILED &&
                 tx.getFailureReason().contains("CRITICAL")
             ));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Idempotency Tests
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Idempotency Key Management")
+    class IdempotencyTests {
+
+        @Test
+        @DisplayName("Should mark idempotency complete on debit failure")
+        void handleDebitFailure_MarksIdempotencyComplete() throws Exception {
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.DEBIT_FAILURE)
+                    .errorMessage("Insufficient balance")
+                    .build();
+
+            testTransaction.setIdempotencyKey("test-idemp-key");
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(transactionRepository.save(any(Transaction.class))).thenReturn(testTransaction);
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+            when(outboxRepository.save(any(OutboxEvent.class))).thenReturn(null);
+
+            sagaOrchestrator.handleDebitFailure(event);
+
+            verify(transactionService).markIdempotencyComplete(
+                    eq("test-idemp-key"), eq(transactionId));
+        }
+
+        @Test
+        @DisplayName("Should mark idempotency complete on credit success")
+        void handleCreditSuccess_MarksIdempotencyComplete() throws Exception {
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.CREDIT_SUCCESS)
+                    .build();
+
+            testTransaction.setIdempotencyKey("test-idemp-key");
+            testTransaction.setStatus(Transaction.TransactionStatus.DEBITED);
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(transactionRepository.save(any(Transaction.class))).thenReturn(testTransaction);
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+            when(outboxRepository.save(any(OutboxEvent.class))).thenReturn(null);
+
+            sagaOrchestrator.handleCreditSuccess(event);
+
+            verify(transactionService).markIdempotencyComplete(
+                    eq("test-idemp-key"), eq(transactionId));
+        }
+
+        @Test
+        @DisplayName("Should mark idempotency complete on compensation success")
+        void handleCompensateSuccess_MarksIdempotencyComplete() {
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.COMPENSATE_SUCCESS)
+                    .build();
+
+            testTransaction.setIdempotencyKey("test-idemp-key");
+            testTransaction.setStatus(Transaction.TransactionStatus.COMPENSATING);
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(transactionRepository.save(any(Transaction.class))).thenReturn(testTransaction);
+
+            sagaOrchestrator.handleCompensateSuccess(event);
+
+            verify(transactionService).markIdempotencyComplete(
+                    eq("test-idemp-key"), eq(transactionId));
+        }
+
+        @Test
+        @DisplayName("Should mark idempotency complete on compensation failure")
+        void handleCompensateFailure_MarksIdempotencyComplete() {
+            SagaEvent event = SagaEvent.builder()
+                    .sagaId(sagaId)
+                    .eventType(SagaEvent.EventType.COMPENSATE_FAILURE)
+                    .errorMessage("System error")
+                    .build();
+
+            testTransaction.setIdempotencyKey("test-idemp-key");
+            testTransaction.setStatus(Transaction.TransactionStatus.COMPENSATING);
+
+            when(transactionRepository.findBySagaId(sagaId)).thenReturn(Optional.of(testTransaction));
+            when(transactionRepository.save(any(Transaction.class))).thenReturn(testTransaction);
+
+            sagaOrchestrator.handleCompensateFailure(event);
+
+            verify(transactionService).markIdempotencyComplete(
+                    eq("test-idemp-key"), eq(transactionId));
         }
     }
 }

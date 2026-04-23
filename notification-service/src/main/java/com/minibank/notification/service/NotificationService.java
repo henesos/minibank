@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,9 +43,13 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
     private final SmsService smsService;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${notification.retry.max-attempts:3}")
     private int defaultMaxRetries;
+
+    @Value("${kafka.topics.notification-events-dlq:notification-events-dlq}")
+    private String dlqTopic;
 
     /**
      * Creates and queues a new notification.
@@ -112,21 +117,57 @@ public class NotificationService {
             throw new NotificationServiceException("Notification cannot be retried - max attempts reached");
         }
 
-        notification.markAsSending();
-        notification = notificationRepository.save(notification);
+        int attempts = 0;
+        int maxRetries = notification.getMaxRetries();
+        String lastError = null;
 
-        try {
-            boolean sent = sendByChannel(notification);
+        while (attempts < maxRetries) {
+            notification.markAsSending();
+            notification = notificationRepository.save(notification);
 
-            if (sent) {
-                notification.markAsSent();
-                log.info("Successfully sent notification: {}", notificationId);
-            } else {
-                handleSendFailure(notification, "Failed to send via provider");
+            try {
+                boolean sent = sendByChannel(notification);
+
+                if (sent) {
+                    notification.markAsSent();
+                    log.info("Successfully sent notification: {}", notificationId);
+                    notification = notificationRepository.save(notification);
+                    return toResponse(notification);
+                } else {
+                    lastError = "Failed to send via provider";
+                    attempts++;
+                    if (attempts >= maxRetries) {
+                        notification.setRetryCount(attempts);
+                        notification.markAsFailed(lastError);
+                        log.error("Notification {} failed permanently after {} attempts: {}",
+                                notificationId, attempts, lastError);
+                        sendToDLQ(notification, lastError);
+                    } else {
+                        log.warn("Notification {} send failed, attempt {}/{}: {} — will retry",
+                                notificationId, attempts, maxRetries, lastError);
+                    }
+                }
+            } catch (Exception e) {
+                lastError = e.getMessage();
+                log.error("Error sending notification {}: {}", notificationId, e.getMessage(), e);
+                attempts++;
+                if (attempts >= maxRetries) {
+                    notification.setRetryCount(attempts);
+                    notification.markAsFailed(lastError);
+                    log.error("Notification {} failed permanently after {} attempts: {}",
+                            notificationId, attempts, lastError);
+                    sendToDLQ(notification, lastError);
+                } else {
+                    log.warn("Notification {} send failed, attempt {}/{}: {} — will retry",
+                            notificationId, attempts, maxRetries, lastError);
+                }
             }
-        } catch (Exception e) {
-            log.error("Error sending notification {}: {}", notificationId, e.getMessage(), e);
-            handleSendFailure(notification, e.getMessage());
+
+            if (attempts < maxRetries) {
+                notification.setRetryCount(attempts);
+                notification.setStatus(NotificationStatus.PENDING);
+                notification = notificationRepository.save(notification);
+            }
         }
 
         notification = notificationRepository.save(notification);
@@ -167,18 +208,37 @@ public class NotificationService {
         notification.incrementRetry();
 
         if (notification.getRetryCount() >= notification.getMaxRetries()) {
-            // No more retries — mark as permanently failed
             notification.markAsFailed(errorMessage);
             log.error("Notification {} failed permanently after {} attempts: {}",
                     notification.getId(), notification.getRetryCount(), errorMessage);
+            sendToDLQ(notification, errorMessage);
         } else {
-            // Retries remaining — keep status as PENDING for scheduled retry
-            // incrementRetry() already sets status to PENDING when retries remain
             log.warn("Notification {} send failed, attempt {}/{}: {} — will retry",
                     notification.getId(),
                     notification.getRetryCount(),
                     notification.getMaxRetries(),
                     errorMessage);
+        }
+    }
+
+    private void sendToDLQ(Notification notification, String errorMessage) {
+        try {
+            NotificationRequest dlqMessage = NotificationRequest.builder()
+                    .userId(notification.getUserId())
+                    .type(notification.getType())
+                    .subject(notification.getSubject())
+                    .content(notification.getContent())
+                    .referenceId(notification.getReferenceId())
+                    .referenceType(notification.getReferenceType())
+                    .recipient(notification.getRecipient())
+                    .metadata(notification.getMetadata())
+                    .idempotencyKey("dlq-" + notification.getId())
+                    .build();
+
+            kafkaTemplate.send(dlqTopic, dlqMessage);
+            log.info("Notification {} sent to DLQ: {}", notification.getId(), dlqTopic);
+        } catch (Exception e) {
+            log.error("Failed to send notification {} to DLQ: {}", notification.getId(), e.getMessage());
         }
     }
 

@@ -87,6 +87,13 @@ public class TransactionService {
         }
 
         // STEP 3: Check daily limit — fromUserId is now @NotNull, cannot be bypassed
+        if (request.getFromUserId() == null) {
+            throw new TransactionServiceException(
+                "fromUserId is required for daily limit validation",
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "MISSING_FROM_USER_ID"
+            );
+        }
         checkDailyLimit(request.getFromUserId(), request.getAmount());
 
         // STEP 4: Validate accounts are different

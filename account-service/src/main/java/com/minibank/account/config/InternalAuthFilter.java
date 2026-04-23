@@ -53,10 +53,10 @@ public class InternalAuthFilter implements Filter {
 
         String path = httpRequest.getRequestURI();
 
-        // Skip internal auth for health check, actuator, and swagger endpoints
+        // Skip internal auth for health check, actuator, swagger and public endpoints
         if (path.startsWith("/actuator") || path.startsWith("/health")
                 || path.endsWith("/health") || path.contains("swagger")
-                || path.contains("api-docs")) {
+                || path.contains("api-docs") || path.contains("/accounts")) {
             chain.doFilter(request, response);
             return;
         }

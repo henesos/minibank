@@ -3,6 +3,8 @@ package com.minibank.transaction.unit;
 import com.minibank.transaction.controller.TransactionController;
 import com.minibank.transaction.dto.TransactionResponse;
 import com.minibank.transaction.dto.TransferRequest;
+import com.minibank.transaction.entity.Transaction;
+import com.minibank.transaction.exception.TransactionServiceException;
 import com.minibank.transaction.service.TransactionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +70,7 @@ class TransactionControllerTest {
         sagaId = UUID.randomUUID();
         fromAccountId = UUID.randomUUID();
         toAccountId = UUID.randomUUID();
-        fromUserId = UUID.randomUUID();
+        fromUserId = userId;
         toUserId = UUID.randomUUID();
 
         sampleResponse = TransactionResponse.builder()
@@ -136,13 +138,12 @@ class TransactionControllerTest {
             // Arrange
             when(request.getHeader("X-User-ID")).thenReturn(null);
 
-            // Act
-            ResponseEntity<Page<TransactionResponse>> response =
-                    transactionController.getMyTransactions(request, 0, 20);
+            // Act & Assert
+            TransactionServiceException exception = assertThrows(TransactionServiceException.class,
+                    () -> transactionController.getMyTransactions(request, 0, 20));
 
-            // Assert
-            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
-            assertNull(response.getBody());
+            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
+            assertEquals("UNAUTHORIZED", exception.getErrorCode());
             verify(transactionService, never()).getTransactionsByUserIdPaginated(any(), anyInt(), anyInt());
         }
 
@@ -152,13 +153,12 @@ class TransactionControllerTest {
             // Arrange
             when(request.getHeader("X-User-ID")).thenReturn("");
 
-            // Act
-            ResponseEntity<Page<TransactionResponse>> response =
-                    transactionController.getMyTransactions(request, 0, 20);
+            // Act & Assert
+            TransactionServiceException exception = assertThrows(TransactionServiceException.class,
+                    () -> transactionController.getMyTransactions(request, 0, 20));
 
-            // Assert
-            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
-            assertNull(response.getBody());
+            assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatus());
+            assertEquals("UNAUTHORIZED", exception.getErrorCode());
             verify(transactionService, never()).getTransactionsByUserIdPaginated(any(), anyInt(), anyInt());
         }
 
@@ -194,12 +194,13 @@ class TransactionControllerTest {
         @DisplayName("Should return 201 CREATED with transaction response on success")
         void initiateTransfer_Success() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             when(transactionService.initiateTransfer(sampleTransferRequest))
                     .thenReturn(sampleResponse);
 
             // Act
             ResponseEntity<TransactionResponse> response =
-                    transactionController.initiateTransfer(sampleTransferRequest);
+                    transactionController.initiateTransfer(request, sampleTransferRequest);
 
             // Assert
             assertEquals(HttpStatus.CREATED, response.getStatusCode());
@@ -214,12 +215,13 @@ class TransactionControllerTest {
         @DisplayName("Should return correct fields in transfer response")
         void initiateTransfer_VerifyResponseFields() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             when(transactionService.initiateTransfer(sampleTransferRequest))
                     .thenReturn(sampleResponse);
 
             // Act
             ResponseEntity<TransactionResponse> response =
-                    transactionController.initiateTransfer(sampleTransferRequest);
+                    transactionController.initiateTransfer(request, sampleTransferRequest);
 
             // Assert
             TransactionResponse body = response.getBody();
@@ -247,12 +249,23 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with transaction response")
         void getTransactionById_Success() {
             // Arrange
-            when(transactionService.getTransactionById(transactionId))
-                    .thenReturn(sampleResponse);
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
+            Transaction transaction = Transaction.builder()
+                    .id(transactionId)
+                    .sagaId(sagaId)
+                    .fromAccountId(fromAccountId)
+                    .toAccountId(toAccountId)
+                    .fromUserId(userId)
+                    .toUserId(toUserId)
+                    .amount(new BigDecimal("150.00"))
+                    .status(Transaction.TransactionStatus.COMPLETED)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            when(transactionService.findTransactionById(transactionId)).thenReturn(transaction);
 
             // Act
             ResponseEntity<TransactionResponse> response =
-                    transactionController.getTransactionById(transactionId);
+                    transactionController.getTransactionById(transactionId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -260,7 +273,7 @@ class TransactionControllerTest {
             assertEquals(transactionId, response.getBody().getId());
             assertEquals(sagaId, response.getBody().getSagaId());
             assertEquals(new BigDecimal("150.00"), response.getBody().getAmount());
-            verify(transactionService).getTransactionById(transactionId);
+            verify(transactionService).findTransactionById(transactionId);
         }
     }
 
@@ -276,19 +289,30 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with transaction response for valid saga ID")
         void getTransactionBySagaId_Success() {
             // Arrange
-            when(transactionService.getTransactionBySagaId(sagaId))
-                    .thenReturn(sampleResponse);
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
+            Transaction transaction = Transaction.builder()
+                    .id(transactionId)
+                    .sagaId(sagaId)
+                    .fromAccountId(fromAccountId)
+                    .toAccountId(toAccountId)
+                    .fromUserId(userId)
+                    .toUserId(toUserId)
+                    .amount(new BigDecimal("150.00"))
+                    .status(Transaction.TransactionStatus.COMPLETED)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            when(transactionService.findTransactionBySagaId(sagaId)).thenReturn(transaction);
 
             // Act
             ResponseEntity<TransactionResponse> response =
-                    transactionController.getTransactionBySagaId(sagaId);
+                    transactionController.getTransactionBySagaId(sagaId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertNotNull(response.getBody());
             assertEquals(transactionId, response.getBody().getId());
             assertEquals(sagaId, response.getBody().getSagaId());
-            verify(transactionService).getTransactionBySagaId(sagaId);
+            verify(transactionService).findTransactionBySagaId(sagaId);
         }
     }
 
@@ -304,6 +328,7 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with list of transactions")
         void getTransactionsByUserId_Success() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             TransactionResponse anotherResponse = TransactionResponse.builder()
                     .id(UUID.randomUUID())
                     .sagaId(UUID.randomUUID())
@@ -323,7 +348,7 @@ class TransactionControllerTest {
 
             // Act
             ResponseEntity<List<TransactionResponse>> response =
-                    transactionController.getTransactionsByUserId(userId);
+                    transactionController.getTransactionsByUserId(userId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -336,11 +361,12 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with empty list when user has no transactions")
         void getTransactionsByUserId_EmptyList() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             when(transactionService.getTransactionsByUserId(userId)).thenReturn(List.of());
 
             // Act
             ResponseEntity<List<TransactionResponse>> response =
-                    transactionController.getTransactionsByUserId(userId);
+                    transactionController.getTransactionsByUserId(userId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -362,12 +388,13 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with list of transactions for the account")
         void getTransactionsByAccountId_Success() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             TransactionResponse anotherResponse = TransactionResponse.builder()
                     .id(UUID.randomUUID())
                     .sagaId(UUID.randomUUID())
                     .fromAccountId(fromAccountId)
                     .toAccountId(UUID.randomUUID())
-                    .fromUserId(fromUserId)
+                    .fromUserId(userId)
                     .toUserId(UUID.randomUUID())
                     .amount(new BigDecimal("300.00"))
                     .currency("USD")
@@ -381,7 +408,7 @@ class TransactionControllerTest {
 
             // Act
             ResponseEntity<List<TransactionResponse>> response =
-                    transactionController.getTransactionsByAccountId(fromAccountId);
+                    transactionController.getTransactionsByAccountId(fromAccountId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -394,11 +421,12 @@ class TransactionControllerTest {
         @DisplayName("Should return 200 with empty list when account has no transactions")
         void getTransactionsByAccountId_EmptyList() {
             // Arrange
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
             when(transactionService.getTransactionsByAccountId(fromAccountId)).thenReturn(List.of());
 
             // Act
             ResponseEntity<List<TransactionResponse>> response =
-                    transactionController.getTransactionsByAccountId(fromAccountId);
+                    transactionController.getTransactionsByAccountId(fromAccountId, request);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
